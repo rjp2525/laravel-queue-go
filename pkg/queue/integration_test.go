@@ -62,7 +62,7 @@ func TestIntegrationPushPop(t *testing.T) {
 	require.NotNil(t, raw)
 
 	var got LaravelPayload
-	err = json.Unmarshal(raw.Body, &got)
+	err = json.Unmarshal([]byte(raw.Body), &got)
 	require.NoError(t, err)
 	assert.Equal(t, `App\Jobs\TestJob`, got.DisplayName)
 }
@@ -86,7 +86,7 @@ func TestIntegrationLaterPop(t *testing.T) {
 	require.NotNil(t, raw)
 
 	var got LaravelPayload
-	err = json.Unmarshal(raw.Body, &got)
+	err = json.Unmarshal([]byte(raw.Body), &got)
 	require.NoError(t, err)
 	assert.Equal(t, `App\Jobs\DelayedJob`, got.DisplayName)
 }
@@ -145,7 +145,10 @@ func TestIntegrationRelease(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), count)
 
-	// Pop again should migrate and return it.
+	// Force migration (Pop throttles migration to once/sec, so call it directly).
+	err = driver.MigrateExpiredJobs(ctx, "default")
+	require.NoError(t, err)
+
 	raw2, err := driver.Pop(ctx, "default")
 	require.NoError(t, err)
 	require.NotNil(t, raw2)
