@@ -62,7 +62,7 @@ func TestIntegrationPushPop(t *testing.T) {
 	require.NotNil(t, raw)
 
 	var got LaravelPayload
-	err = json.Unmarshal(raw.Body, &got)
+	err = json.Unmarshal([]byte(raw.Body), &got)
 	require.NoError(t, err)
 	assert.Equal(t, `App\Jobs\TestJob`, got.DisplayName)
 }
@@ -86,7 +86,7 @@ func TestIntegrationLaterPop(t *testing.T) {
 	require.NotNil(t, raw)
 
 	var got LaravelPayload
-	err = json.Unmarshal(raw.Body, &got)
+	err = json.Unmarshal([]byte(raw.Body), &got)
 	require.NoError(t, err)
 	assert.Equal(t, `App\Jobs\DelayedJob`, got.DisplayName)
 }
