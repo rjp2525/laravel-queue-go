@@ -41,7 +41,7 @@ jobs:
       - name: Run unit tests
         run: go test -v -race -count=1 -short -coverprofile=coverage.txt ./...
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: coverage.txt
         continue-on-error: true
