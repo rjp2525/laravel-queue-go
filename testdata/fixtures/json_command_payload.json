@@ -1,0 +1,19 @@
+{
+  "uuid": "d5e6f7a8-1111-2222-3333-444455556666",
+  "displayName": "App\\Jobs\\ProcessUpload",
+  "job": "Illuminate\\Queue\\CallQueuedHandler@call",
+  "maxTries": 3,
+  "maxExceptions": null,
+  "failOnTimeout": false,
+  "backoff": null,
+  "timeout": 60,
+  "retryUntil": null,
+  "tags": ["upload"],
+  "data": {
+    "commandName": "App\\Jobs\\ProcessUpload",
+    "command": "{\"commandName\":\"App\\\\Jobs\\\\ProcessUpload\",\"fileId\":12345,\"fileName\":\"report.pdf\",\"isPublic\":true,\"amount\":99.95,\"tags\":[\"finance\",\"q4\"],\"metadata\":{\"source\":\"api\",\"version\":2}}"
+  },
+  "id": "aabbccdd11223344aabbccdd11223344",
+  "attempts": 0,
+  "pushedAt": 1711900000.789
+}

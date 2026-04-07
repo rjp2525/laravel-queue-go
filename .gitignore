@@ -1,0 +1,29 @@
+# Binaries
+bin/
+lqworker
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+coverage.txt
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vendor (use go modules)
+vendor/
+
+# Debug
+__debug_bin*

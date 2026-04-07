@@ -1,0 +1,19 @@
+{
+  "uuid": "c5d2f8d7-5678-9abc-defa-0987654321cd",
+  "displayName": "App\\Jobs\\SendNotification",
+  "job": "Illuminate\\Queue\\CallQueuedHandler@call",
+  "maxTries": 5,
+  "maxExceptions": 2,
+  "failOnTimeout": true,
+  "backoff": 10,
+  "timeout": 60,
+  "retryUntil": 1711990000,
+  "tags": ["notifications", "user:99"],
+  "data": {
+    "commandName": "App\\Jobs\\SendNotification",
+    "command": "O:25:\"App\\Jobs\\SendNotification\":2:{s:8:\"channels\";a:2:{i:0;s:4:\"mail\";i:1;s:5:\"slack\";}s:6:\"userId\";i:99;}"
+  },
+  "id": "f9e8d7c6b5a4f9e8d7c6b5a4f9e8d7c6",
+  "attempts": 2,
+  "pushedAt": 1711950000.456
+}

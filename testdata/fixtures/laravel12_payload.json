@@ -1,0 +1,19 @@
+{
+  "uuid": "b4c1e7c6-1234-5678-abcd-1234567890ab",
+  "displayName": "App\\Jobs\\ProcessReport",
+  "job": "Illuminate\\Queue\\CallQueuedHandler@call",
+  "maxTries": 3,
+  "maxExceptions": 1,
+  "failOnTimeout": false,
+  "backoff": [5, 30, 90],
+  "timeout": 30,
+  "retryUntil": null,
+  "tags": ["important", "client:42"],
+  "data": {
+    "commandName": "App\\Jobs\\ProcessReport",
+    "command": "O:22:\"App\\Jobs\\ProcessReport\":3:{s:6:\"userId\";i:42;s:8:\"reportId\";s:10:\"rpt_abc123\";s:5:\"queue\";s:7:\"default\";}"
+  },
+  "id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+  "attempts": 0,
+  "pushedAt": 1711900000.123
+}
