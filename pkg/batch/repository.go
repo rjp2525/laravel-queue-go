@@ -111,10 +111,6 @@ func (r *Repository) DecrementPendingJobs(ctx context.Context, id string) (*Batc
 // IncrementFailedJobs atomically increments the failure counter.
 // Note: failed_job_ids append is best-effort (not atomic with concurrent writes).
 func (r *Repository) IncrementFailedJobs(ctx context.Context, id string, jobID string) error {
-	failedJSON, _ := json.Marshal([]string{jobID})
-
-	// Use SQL string concatenation to append atomically where possible.
-	// For strict correctness under concurrency, use a database JSON function or transactions.
 	query := `UPDATE ` + r.table + ` SET failed_jobs = failed_jobs + 1, failed_job_ids = ? WHERE id = ?`
 
 	// Read-then-write for the JSON array. Accept the race trade-off for portability.
@@ -123,7 +119,7 @@ func (r *Repository) IncrementFailedJobs(ctx context.Context, id string, jobID s
 		return fmt.Errorf("batch: increment_failed %s: %w", id, err)
 	}
 	allFailed := append(b.FailedJobIDs, jobID)
-	failedJSON, _ = json.Marshal(allFailed)
+	failedJSON, _ := json.Marshal(allFailed)
 
 	_, err = r.db.ExecContext(ctx, query, string(failedJSON), id)
 	if err != nil {

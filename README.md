@@ -9,7 +9,7 @@ Go package for interop with Laravel's Redis queue system. Consume jobs dispatche
 
 ## Requirements
 
-- Go 1.25+
+- Go 1.26+
 - Redis 6+
 
 ## Installation
