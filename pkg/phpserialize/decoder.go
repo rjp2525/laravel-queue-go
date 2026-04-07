@@ -65,7 +65,7 @@ func (d *decoder) readNull() (any, error) {
 
 func (d *decoder) readBool() (any, error) {
 	if !d.expect("b:") {
-		return nil, fmt.Errorf("expected b:")
+		return nil, fmt.Errorf("expected 'b:' prefix")
 	}
 	if d.pos >= len(d.data) {
 		return nil, fmt.Errorf("unexpected end reading bool")
@@ -81,7 +81,7 @@ func (d *decoder) readBool() (any, error) {
 
 func (d *decoder) readInt() (any, error) {
 	if !d.expect("i:") {
-		return nil, fmt.Errorf("expected i:")
+		return nil, fmt.Errorf("expected 'i:' prefix")
 	}
 	numStr := d.readUntil(';')
 	d.pos++ // skip ;
@@ -95,7 +95,7 @@ func (d *decoder) readInt() (any, error) {
 
 func (d *decoder) readFloat() (any, error) {
 	if !d.expect("d:") {
-		return nil, fmt.Errorf("expected d:")
+		return nil, fmt.Errorf("expected 'd:' prefix")
 	}
 	numStr := d.readUntil(';')
 	d.pos++ // skip ;
@@ -122,7 +122,7 @@ func (d *decoder) readFloat() (any, error) {
 
 func (d *decoder) readString() (string, error) {
 	if !d.expect("s:") {
-		return "", fmt.Errorf("expected s:")
+		return "", fmt.Errorf("expected 's:' prefix")
 	}
 	length, err := d.readLength()
 	if err != nil {
@@ -145,7 +145,7 @@ func (d *decoder) readString() (string, error) {
 
 func (d *decoder) readArray() (any, error) {
 	if !d.expect("a:") {
-		return nil, fmt.Errorf("expected a:")
+		return nil, fmt.Errorf("expected 'a:' prefix")
 	}
 	count, err := d.readLength()
 	if err != nil {
@@ -197,7 +197,7 @@ func (d *decoder) readArrayKey() (any, error) {
 
 func (d *decoder) readObject() (any, error) {
 	if !d.expect("O:") {
-		return nil, fmt.Errorf("expected O:")
+		return nil, fmt.Errorf("expected 'O:' prefix")
 	}
 	classNameLen, err := d.readLength()
 	if err != nil {
@@ -273,7 +273,7 @@ func (d *decoder) readCustomObject() (any, error) {
 	// C:className:dataLen:{data} — custom serializable objects.
 	// We treat these as opaque strings since we can't deserialize custom PHP logic.
 	if !d.expect("C:") {
-		return nil, fmt.Errorf("expected C:")
+		return nil, fmt.Errorf("expected 'C:' prefix")
 	}
 	classNameLen, err := d.readLength()
 	if err != nil {
