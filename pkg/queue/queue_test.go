@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -134,6 +135,33 @@ func TestKeysCustomPrefix(t *testing.T) {
 func TestKeysEmptyPrefix(t *testing.T) {
 	k := NewKeys("")
 	assert.Equal(t, "queues:default", k.Ready("default"))
+}
+
+func TestNewRedisDriverNoPrefixKeys(t *testing.T) {
+	// NoPrefix should produce keys with no prefix, matching Laravel's default
+	// key format ("queues:{name}") when no REDIS_CONNECTION prefix is configured.
+	d := NewRedisDriver(redis.NewClient(&redis.Options{Addr: "localhost:0"}), RedisDriverConfig{
+		NoPrefix: true,
+	})
+	assert.Equal(t, "queues:default", d.keys.Ready("default"))
+	assert.Equal(t, "queues:default:delayed", d.keys.Delayed("default"))
+	assert.Equal(t, "queues:default:reserved", d.keys.Reserved("default"))
+	assert.Equal(t, "queues:default:notify", d.keys.Notify("default"))
+}
+
+func TestNewRedisDriverDefaultPrefix(t *testing.T) {
+	// Without NoPrefix, empty Prefix should fall back to the default.
+	d := NewRedisDriver(redis.NewClient(&redis.Options{Addr: "localhost:0"}), RedisDriverConfig{})
+	assert.Equal(t, "laravel-database-queues:default", d.keys.Ready("default"))
+}
+
+func TestNewRedisDriverNoPrefixOverridesExplicitPrefix(t *testing.T) {
+	// NoPrefix takes precedence over an explicit Prefix value.
+	d := NewRedisDriver(redis.NewClient(&redis.Options{Addr: "localhost:0"}), RedisDriverConfig{
+		Prefix:   "should-be-ignored-",
+		NoPrefix: true,
+	})
+	assert.Equal(t, "queues:jobs", d.keys.Ready("jobs"))
 }
 
 // ---------------------------------------------------------------------------
