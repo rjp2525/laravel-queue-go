@@ -24,13 +24,16 @@ type RedisDriver struct {
 
 type RedisDriverConfig struct {
 	Prefix     string
+	NoPrefix   bool // When true, use empty prefix regardless of Prefix value.
 	RetryAfter time.Duration
 	BlockFor   time.Duration
 	BatchSize  int
 }
 
 func NewRedisDriver(client redis.Cmdable, cfg RedisDriverConfig) *RedisDriver {
-	if cfg.Prefix == "" {
+	if cfg.NoPrefix {
+		cfg.Prefix = ""
+	} else if cfg.Prefix == "" {
 		cfg.Prefix = DefaultRedisPrefix
 	}
 	if cfg.RetryAfter == 0 {
