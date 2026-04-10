@@ -4,10 +4,23 @@ func GetString(obj *Object, key string) string {
 	if obj == nil {
 		return ""
 	}
-	if v, ok := obj.Properties[key].(string); ok {
+	switch v := obj.Properties[key].(type) {
+	case string:
 		return v
+	case *Enum:
+		return v.CaseName
 	}
 	return ""
+}
+
+func GetEnum(obj *Object, key string) *Enum {
+	if obj == nil {
+		return nil
+	}
+	if v, ok := obj.Properties[key].(*Enum); ok {
+		return v
+	}
+	return nil
 }
 
 func GetInt(obj *Object, key string) int64 {

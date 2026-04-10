@@ -50,6 +50,8 @@ func (d *decoder) readValue() (any, error) {
 		return d.readReference()
 	case 'C':
 		return d.readCustomObject()
+	case 'E':
+		return d.readEnum()
 	default:
 		return nil, fmt.Errorf("unknown type indicator '%c'", d.data[d.pos])
 	}
@@ -311,6 +313,41 @@ func (d *decoder) readCustomObject() (any, error) {
 	}
 	d.refs = append(d.refs, obj)
 	return obj, nil
+}
+
+func (d *decoder) readEnum() (any, error) {
+	// PHP 8.1 backed enum: E:{length}:"{ClassName:CaseName}";
+	if !d.expect("E:") {
+		return nil, fmt.Errorf("expected 'E:' prefix")
+	}
+	length, err := d.readLength()
+	if err != nil {
+		return nil, err
+	}
+	if !d.expect(`:"`) {
+		return nil, fmt.Errorf("expected :\" after enum length")
+	}
+	if d.pos+length > len(d.data) {
+		return nil, fmt.Errorf("enum length %d exceeds data", length)
+	}
+	val := d.data[d.pos : d.pos+length]
+	d.pos += length
+	if !d.expect(`";`) {
+		return nil, fmt.Errorf("expected \"; after enum value")
+	}
+
+	// Split "ClassName:CaseName" on the last colon to handle namespaced class names.
+	idx := strings.LastIndex(val, ":")
+	if idx < 0 {
+		return nil, fmt.Errorf("invalid enum value %q: missing colon separator", val)
+	}
+
+	enum := &Enum{
+		ClassName: val[:idx],
+		CaseName:  val[idx+1:],
+	}
+	d.refs = append(d.refs, enum)
+	return enum, nil
 }
 
 func (d *decoder) readLength() (int, error) {

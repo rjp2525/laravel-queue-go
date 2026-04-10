@@ -159,6 +159,91 @@ func TestDecodeBytes(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// PHP 8.1 backed enum support
+// ---------------------------------------------------------------------------
+
+func TestDecodeEnum(t *testing.T) {
+	// E:23:"App\Enums\Status:ACTIVE";
+	val, err := Decode(`E:23:"App\Enums\Status:ACTIVE";`)
+	require.NoError(t, err)
+	enum, ok := val.(*Enum)
+	require.True(t, ok)
+	assert.Equal(t, `App\Enums\Status`, enum.ClassName)
+	assert.Equal(t, "ACTIVE", enum.CaseName)
+}
+
+func TestDecodeEnumLongNamespace(t *testing.T) {
+	val, err := Decode(`E:79:"Galactic\ScanData\Enums\PartialUploadStatus:WINDOWS_CLOSING_REASON_USER_CLOSING";`)
+	require.NoError(t, err)
+	enum, ok := val.(*Enum)
+	require.True(t, ok)
+	assert.Equal(t, `Galactic\ScanData\Enums\PartialUploadStatus`, enum.ClassName)
+	assert.Equal(t, "WINDOWS_CLOSING_REASON_USER_CLOSING", enum.CaseName)
+}
+
+func TestDecodeEnumInObject(t *testing.T) {
+	// Object with an enum property.
+	data := `O:8:"stdClass":2:{s:6:"status";E:23:"App\Enums\Status:ACTIVE";s:2:"id";i:42;}`
+	val, err := Decode(data)
+	require.NoError(t, err)
+	obj, ok := val.(*Object)
+	require.True(t, ok)
+	assert.Equal(t, int64(42), obj.Properties["id"])
+	enum, ok := obj.Properties["status"].(*Enum)
+	require.True(t, ok)
+	assert.Equal(t, `App\Enums\Status`, enum.ClassName)
+	assert.Equal(t, "ACTIVE", enum.CaseName)
+}
+
+func TestDecodeEnumInArray(t *testing.T) {
+	data := `a:2:{i:0;E:23:"App\Enums\Status:ACTIVE";i:1;E:24:"App\Enums\Status:PENDING";}`
+	val, err := Decode(data)
+	require.NoError(t, err)
+	arr, ok := val.(*Array)
+	require.True(t, ok)
+	assert.Equal(t, 2, arr.Len())
+	e0, ok := arr.Values[0].(*Enum)
+	require.True(t, ok)
+	assert.Equal(t, "ACTIVE", e0.CaseName)
+	e1, ok := arr.Values[1].(*Enum)
+	require.True(t, ok)
+	assert.Equal(t, "PENDING", e1.CaseName)
+}
+
+func TestEncodeEnum(t *testing.T) {
+	e := &Enum{ClassName: `App\Enums\Status`, CaseName: "ACTIVE"}
+	s, err := Encode(e)
+	require.NoError(t, err)
+	assert.Equal(t, `E:23:"App\Enums\Status:ACTIVE";`, s)
+}
+
+func TestRoundTripEnum(t *testing.T) {
+	e := &Enum{ClassName: `App\Enums\Status`, CaseName: "PENDING"}
+	encoded, err := Encode(e)
+	require.NoError(t, err)
+	decoded, err := Decode(encoded)
+	require.NoError(t, err)
+	out, ok := decoded.(*Enum)
+	require.True(t, ok)
+	assert.Equal(t, e.ClassName, out.ClassName)
+	assert.Equal(t, e.CaseName, out.CaseName)
+}
+
+func TestGetEnum(t *testing.T) {
+	e := &Enum{ClassName: `App\Enums\Status`, CaseName: "ACTIVE"}
+	obj := &Object{Properties: map[string]any{"status": e}}
+	assert.Equal(t, e, GetEnum(obj, "status"))
+	assert.Nil(t, GetEnum(obj, "missing"))
+	assert.Nil(t, GetEnum(nil, "status"))
+}
+
+func TestGetStringReturnsEnumCaseName(t *testing.T) {
+	e := &Enum{ClassName: `App\Enums\Status`, CaseName: "ACTIVE"}
+	obj := &Object{Properties: map[string]any{"status": e}}
+	assert.Equal(t, "ACTIVE", GetString(obj, "status"))
+}
+
+// ---------------------------------------------------------------------------
 // Visibility stripping
 // ---------------------------------------------------------------------------
 
