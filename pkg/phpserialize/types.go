@@ -44,6 +44,13 @@ func (a *Array) ToMap() map[string]any {
 	return m
 }
 
+// Enum represents a PHP 8.1+ backed enum value.
+// Serialized as E:{length}:"{ClassName:CaseName}";
+type Enum struct {
+	ClassName string
+	CaseName  string
+}
+
 type Visibility int
 
 const (

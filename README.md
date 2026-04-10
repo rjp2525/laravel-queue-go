@@ -143,6 +143,7 @@ job.GetFloat("amount")         // float64
 job.GetBool("is_active")       // bool
 job.GetSlice("tags")           // []any
 job.GetMap("metadata")         // map[string]any
+job.GetEnum("status")          // *phpserialize.Enum (PHP 8.1 backed enum)
 job.GetModelID("user")         // *phpserialize.ModelIdentifier (Eloquent model)
 ```
 
@@ -362,7 +363,9 @@ encoded, err := phpserialize.MarshalObject("App\\Jobs\\MyJob", map[string]any{
 name := phpserialize.GetString(obj, "name")
 ```
 
-The decoder handles objects, arrays, strings, integers, floats, booleans, null, and PHP property visibility (public/protected/private null-byte prefixes). `ModelIdentifier` support is built in for Eloquent model references.
+The decoder handles objects, arrays, strings, integers, floats, booleans, null, PHP 8.1 backed enums (`E:` format), and PHP property visibility (public/protected/private null-byte prefixes). `ModelIdentifier` support is built in for Eloquent model references.
+
+Enum values are decoded into `*phpserialize.Enum` with `ClassName` and `CaseName` fields. `GetString` also works on enum properties and returns the case name.
 
 ### Configuration
 

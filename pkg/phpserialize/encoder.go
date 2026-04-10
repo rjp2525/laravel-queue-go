@@ -80,6 +80,8 @@ func encodeValue(b *strings.Builder, v any) error {
 		return encodeObject(b, val)
 	case *Array:
 		return encodeArray(b, val)
+	case *Enum:
+		encodeEnum(b, val)
 	default:
 		rv := reflect.ValueOf(v)
 		switch rv.Kind() {
@@ -210,4 +212,14 @@ func encodeArray(b *strings.Builder, arr *Array) error {
 	}
 	b.WriteByte('}')
 	return nil
+}
+
+func encodeEnum(b *strings.Builder, e *Enum) {
+	// E:{length}:"{ClassName:CaseName}";
+	val := e.ClassName + ":" + e.CaseName
+	b.WriteString("E:")
+	b.WriteString(strconv.Itoa(len(val)))
+	b.WriteString(":\"")
+	b.WriteString(val)
+	b.WriteString("\";")
 }
