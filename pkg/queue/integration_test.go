@@ -254,6 +254,63 @@ func TestIntegrationClose(t *testing.T) {
 // Full dispatch -> worker consume flow
 // ---------------------------------------------------------------------------
 
+// TestIntegrationGracefulStop verifies that Stop() lets in-flight handlers
+// finish on the parent context (no cancellation) and that Run() blocks until
+// they drain. Regression test for the SIGTERM-mid-job behavior that left
+// reserved jobs stuck waiting for retry_after.
+func TestIntegrationGracefulStop(t *testing.T) {
+	client := setupRedis(t)
+	driver := newTestDriver(client)
+	ctx := context.Background()
+
+	dispatcher := NewDispatcher(driver, WithDefaultQueue("graceful"))
+	err := dispatcher.Dispatch(ctx, `App\Jobs\Slow`, nil)
+	require.NoError(t, err)
+
+	worker := NewWorker(driver, WorkerOptions{
+		Queue:       "graceful",
+		Concurrency: 2,
+		Sleep:       50 * time.Millisecond,
+	})
+
+	handlerStarted := make(chan struct{})
+	var completedNormally atomic.Bool
+	worker.Register(`App\Jobs\Slow`, func(ctx context.Context, job *Job) error {
+		close(handlerStarted)
+		// Sleep longer than the time we'll wait before calling Stop. If Stop
+		// cancelled the context, this would return early via ctx.Err().
+		select {
+		case <-time.After(500 * time.Millisecond):
+			completedNormally.Store(true)
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+
+	runErr := make(chan error, 1)
+	go func() { runErr <- worker.Run(ctx) }()
+
+	// Wait for the handler to be in flight, then ask the worker to stop.
+	<-handlerStarted
+	stopAt := time.Now()
+	worker.Stop()
+
+	select {
+	case err := <-runErr:
+		drainDuration := time.Since(stopAt)
+		assert.NoError(t, err, "Run should return cleanly after graceful Stop")
+		assert.True(t, completedNormally.Load(),
+			"handler should complete normally, not via context cancellation")
+		// Drain must have waited for the ~500ms handler — at least 300ms gives
+		// generous slack for scheduling jitter.
+		assert.GreaterOrEqual(t, drainDuration, 300*time.Millisecond,
+			"Run should block until in-flight handlers finish")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run did not return after Stop within 2s")
+	}
+}
+
 func TestIntegrationDispatchAndConsume(t *testing.T) {
 	client := setupRedis(t)
 	driver := newTestDriver(client)

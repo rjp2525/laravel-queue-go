@@ -25,6 +25,16 @@ type Worker struct {
 	failed         failed.Logger
 	logger         *slog.Logger
 	connection     string
+
+	// fetchCancel cancels the context used by the fetch loop (driver.Pop and
+	// the inter-poll sleep). Stop sets stopRequested and calls fetchCancel so
+	// the worker stops claiming new jobs without aborting handlers that are
+	// already running on the parent context passed to Run. stopRequested is
+	// sticky across Run lifetimes so a Stop() before Run() makes the next Run
+	// exit immediately.
+	stopMu        sync.Mutex
+	stopRequested bool
+	fetchCancel   context.CancelFunc
 }
 
 func newWorker(
@@ -83,12 +93,42 @@ func (w *Worker) On(eventType events.EventType, listener events.Listener) {
 	w.events.On(eventType, listener)
 }
 
-// Run starts the worker loop. Blocks until context is cancelled or limits are reached.
+// Run starts the worker loop. Blocks until the parent context is cancelled,
+// Stop is called, or worker limits (MaxJobs / MaxTime) are reached. When Stop
+// is the trigger, in-flight handlers keep running on the parent context until
+// they finish; Run only returns after they drain. Callers that want a hard
+// deadline for that drain should cancel the parent context after Stop.
 func (w *Worker) Run(ctx context.Context) error {
-	if w.options.Concurrency <= 1 {
-		return w.runSingle(ctx)
+	fetchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	w.stopMu.Lock()
+	w.fetchCancel = cancel
+	alreadyStopped := w.stopRequested
+	w.stopMu.Unlock()
+
+	if alreadyStopped {
+		cancel()
 	}
-	return w.runConcurrent(ctx)
+
+	if w.options.Concurrency <= 1 {
+		return w.runSingle(ctx, fetchCtx)
+	}
+	return w.runConcurrent(ctx, fetchCtx)
+}
+
+// Stop signals the worker to stop pulling new jobs. In-flight handlers continue
+// running on the context that was passed to Run; the call returns immediately
+// without waiting for them. Safe to call multiple times and before Run starts;
+// in the latter case the next Run will exit as soon as it enters its fetch loop.
+func (w *Worker) Stop() {
+	w.stopMu.Lock()
+	defer w.stopMu.Unlock()
+
+	w.stopRequested = true
+	if w.fetchCancel != nil {
+		w.fetchCancel()
+	}
 }
 
 type fetchResult int
@@ -100,9 +140,9 @@ const (
 	fetchError
 )
 
-func (w *Worker) fetchJob(ctx context.Context, jobsProcessed int, startTime time.Time) (*RawJob, fetchResult) {
+func (w *Worker) fetchJob(fetchCtx context.Context, jobsProcessed int, startTime time.Time) (*RawJob, fetchResult) {
 	select {
-	case <-ctx.Done():
+	case <-fetchCtx.Done():
 		w.events.Fire(events.Event{Type: events.WorkerStopping})
 		return nil, fetchStop
 	default:
@@ -115,13 +155,15 @@ func (w *Worker) fetchJob(ctx context.Context, jobsProcessed int, startTime time
 		return nil, fetchStop
 	}
 
-	raw, err := w.driver.Pop(ctx, w.options.Queue)
+	raw, err := w.driver.Pop(fetchCtx, w.options.Queue)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return nil, fetchStop
 		}
 		w.logger.Error("pop failed", "error", err)
-		time.Sleep(w.options.Sleep)
+		if !w.sleepOrStop(fetchCtx, w.options.Sleep) {
+			return nil, fetchStop
+		}
 		return nil, fetchError
 	}
 
@@ -129,19 +171,38 @@ func (w *Worker) fetchJob(ctx context.Context, jobsProcessed int, startTime time
 		if w.options.StopOnEmpty {
 			return nil, fetchStop
 		}
-		time.Sleep(w.options.Sleep)
+		if !w.sleepOrStop(fetchCtx, w.options.Sleep) {
+			return nil, fetchStop
+		}
 		return nil, fetchEmpty
 	}
 
 	return raw, fetchGotJob
 }
 
-func (w *Worker) runSingle(ctx context.Context) error {
+// sleepOrStop sleeps for d but returns false immediately if fetchCtx is
+// cancelled. Replaces bare time.Sleep so Stop() doesn't have to wait out the
+// inter-poll backoff before the worker actually exits.
+func (w *Worker) sleepOrStop(fetchCtx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-fetchCtx.Done():
+		return false
+	}
+}
+
+func (w *Worker) runSingle(ctx, fetchCtx context.Context) error {
 	var jobsProcessed int
 	startTime := time.Now()
 
 	for {
-		raw, result := w.fetchJob(ctx, jobsProcessed, startTime)
+		raw, result := w.fetchJob(fetchCtx, jobsProcessed, startTime)
 		switch result {
 		case fetchStop:
 			return ctx.Err()
@@ -153,7 +214,7 @@ func (w *Worker) runSingle(ctx context.Context) error {
 	}
 }
 
-func (w *Worker) runConcurrent(ctx context.Context) error {
+func (w *Worker) runConcurrent(ctx, fetchCtx context.Context) error {
 	var (
 		wg            sync.WaitGroup
 		jobsProcessed int
@@ -168,7 +229,7 @@ func (w *Worker) runConcurrent(ctx context.Context) error {
 		count := jobsProcessed
 		mu.Unlock()
 
-		raw, result := w.fetchJob(ctx, count, startTime)
+		raw, result := w.fetchJob(fetchCtx, count, startTime)
 		switch result {
 		case fetchStop:
 			wg.Wait()
