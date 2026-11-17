@@ -227,7 +227,7 @@ func Test_generateID_format(t *testing.T) {
 
 func Test_generateID_unique(t *testing.T) {
 	ids := make(map[string]bool)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := generateID()
 		assert.False(t, ids[id], "duplicate ID generated")
 		ids[id] = true

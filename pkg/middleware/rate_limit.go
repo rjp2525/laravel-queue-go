@@ -49,8 +49,7 @@ func RateLimited(client redis.Cmdable, key string, maxAttempts int, decay time.D
 		processErr := next()
 
 		if processErr != nil {
-			var releaseErr *ReleaseError
-			if !errors.As(processErr, &releaseErr) {
+			if _, released := errors.AsType[*ReleaseError](processErr); !released {
 				_ = client.Decr(ctx, limiterKey).Err()
 			}
 		}
