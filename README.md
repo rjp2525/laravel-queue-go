@@ -5,6 +5,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/rjp2525/laravel-queue-go)](https://goreportcard.com/report/github.com/rjp2525/laravel-queue-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+**Documentation: [laravel-queue-go.reno.sh](https://laravel-queue-go.reno.sh)**
+
 Go package for interop with Laravel's Redis queue system. Consume jobs dispatched by Laravel and dispatch jobs for Laravel workers to pick up. Supports both PHP-serialized and JSON-encoded command payloads.
 
 ## Requirements
@@ -146,7 +148,6 @@ job.GetFloat("amount")         // float64
 job.GetBool("is_active")       // bool
 job.GetSlice("tags")           // []any
 job.GetMap("metadata")         // map[string]any
-job.GetEnum("status")          // *phpserialize.Enum (PHP 8.1 backed enum)
 job.GetModelID("user")         // *phpserialize.ModelIdentifier (Eloquent model)
 ```
 

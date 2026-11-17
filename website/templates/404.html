@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}<meta name="robots" content="noindex"></head>
+<body>
+<div class="frame">
+  {{template "header" .}}
+  <div class="workspace">
+    {{template "sidebar" .}}
+    <div class="scrim" data-menu-close></div>
+    <main class="pane pane-home" data-pane>
+      <div class="glow glow-green"></div>
+      <section class="notfound">
+        <p class="c">// 404</p>
+        <h1>That job isn't on this queue.</h1>
+        <p>The page you asked for doesn't exist. It may have moved when the docs were reorganised.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/docs/introduction/">open-the-docs</a>
+          <button class="btn" type="button" data-search-open>search</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  {{template "footer" .}}
+</div>
+{{template "search" .}}
+</body>
+</html>

@@ -27,3 +27,6 @@ vendor/
 
 # Debug
 __debug_bin*
+
+# Docs site build output
+website/dist/

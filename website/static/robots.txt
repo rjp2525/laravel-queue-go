@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://laravel-queue-go.reno.sh/sitemap.xml
