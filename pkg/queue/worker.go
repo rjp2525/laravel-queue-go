@@ -270,8 +270,7 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 
 	job, err := ParseJob(ctx, raw, w.driver)
 	if err != nil {
-		w.logger.Error("failed to parse job", "error", err)
-		_ = w.driver.Delete(context.WithoutCancel(ctx), raw)
+		w.failUnparseable(context.WithoutCancel(ctx), raw, err)
 		return
 	}
 
@@ -291,8 +290,7 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 
 	handler := w.resolveHandler(job)
 	if handler == nil {
-		w.logger.Warn("no handler registered", "job", job.DisplayName())
-		_ = job.Delete()
+		w.fail(context.WithoutCancel(ctx), job, fmt.Errorf("%w for %s", ErrNoHandler, job.DisplayName()), 0)
 		return
 	}
 
