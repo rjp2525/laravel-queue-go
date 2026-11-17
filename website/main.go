@@ -67,6 +67,7 @@ type page struct {
 	Body        template.HTML
 	Headings    []heading
 	Text        string // plain text, for search
+	Image       string // social preview image, e.g. "/og/workers.png"
 	Prev, Next  *page
 }
 
@@ -167,6 +168,35 @@ func build(out string) error {
 		return os.WriteFile(dest, buf.Bytes(), 0o644)
 	}
 
+	// Social preview images.
+	fonts, err := loadOGFonts()
+	if err != nil {
+		return err
+	}
+	for _, p := range pages {
+		p.Image = "/og/" + p.Slug + ".png"
+		tab := "_docs"
+		switch p.Slug {
+		case "laravel-versions":
+			tab = "_laravel"
+		case "upgrading":
+			tab = "_upgrading"
+		}
+		card := ogCard{Kicker: "// docs / " + p.Section, Title: p.Title, Description: p.Description, Tab: tab}
+		if err := writeOGImage(fonts, filepath.Join(out, filepath.FromSlash(p.Image)), card); err != nil {
+			return err
+		}
+	}
+	const homeImage = "/og/home.png"
+	if err := writeOGImage(fonts, filepath.Join(out, filepath.FromSlash(homeImage)), ogCard{
+		Kicker:      "// hi laravel. meet go.",
+		Title:       siteName,
+		Description: "> work your Laravel queues from Go. Same jobs, same retries, same failed-jobs table.",
+		Tab:         "_hello",
+	}); err != nil {
+		return err
+	}
+
 	for _, p := range pages {
 		if err := render("doc.html", filepath.Join("docs", p.Slug, "index.html"), p); err != nil {
 			return err
@@ -177,11 +207,11 @@ func build(out string) error {
 	if err != nil {
 		return err
 	}
-	home.URL = "/"
+	home.URL, home.Image = "/", homeImage
 	if err := render("home.html", "index.html", home); err != nil {
 		return err
 	}
-	notFound := &page{Title: "Not found", Description: "That page does not exist.", URL: "/404.html"}
+	notFound := &page{Title: "Not found", Description: "That page does not exist.", URL: "/404.html", Image: homeImage}
 	if err := render("404.html", "404.html", notFound); err != nil {
 		return err
 	}
