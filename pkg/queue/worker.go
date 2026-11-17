@@ -116,6 +116,11 @@ func (w *Worker) Run(ctx context.Context) error {
 		cancel()
 	}
 
+	// Fired once, whatever ends the loop: cancellation, Stop, MaxJobs,
+	// MaxTime or an empty queue with StopOnEmpty. In-flight jobs have
+	// finished by then.
+	defer w.events.Fire(events.Event{Type: events.WorkerStopping})
+
 	if w.options.Concurrency <= 1 {
 		return w.runSingle(ctx, fetchCtx)
 	}
@@ -145,12 +150,11 @@ const (
 	fetchError
 )
 
+// fetchJob reserves the next job. jobsProcessed is the number of jobs already
+// handed out, which is what MaxJobs limits.
 func (w *Worker) fetchJob(fetchCtx context.Context, jobsProcessed int, startTime time.Time) (*RawJob, fetchResult) {
-	select {
-	case <-fetchCtx.Done():
-		w.events.Fire(events.Event{Type: events.WorkerStopping})
+	if fetchCtx.Err() != nil {
 		return nil, fetchStop
-	default:
 	}
 
 	if w.options.MaxJobs > 0 && jobsProcessed >= w.options.MaxJobs {
@@ -221,38 +225,42 @@ func (w *Worker) runSingle(ctx, fetchCtx context.Context) error {
 
 func (w *Worker) runConcurrent(ctx, fetchCtx context.Context) error {
 	var (
-		wg            sync.WaitGroup
-		jobsProcessed int
-		mu            sync.Mutex
-		startTime     = time.Now()
+		wg          sync.WaitGroup
+		jobsStarted int
+		startTime   = time.Now()
 	)
 
 	sem := make(chan struct{}, w.options.Concurrency)
 
 	for {
-		mu.Lock()
-		count := jobsProcessed
-		mu.Unlock()
-
-		raw, result := w.fetchJob(fetchCtx, count, startTime)
-		switch result {
-		case fetchStop:
+		// Take a slot before reserving a job. A job popped while every slot
+		// is busy would sit in the reserved set with its retry_after clock
+		// running, and could be handed to another worker before this one
+		// even starts it.
+		select {
+		case sem <- struct{}{}:
+		case <-fetchCtx.Done():
 			wg.Wait()
 			return ctx.Err()
-		case fetchEmpty, fetchError:
+		}
+
+		raw, result := w.fetchJob(fetchCtx, jobsStarted, startTime)
+		if result != fetchGotJob {
+			<-sem
+			if result == fetchStop {
+				wg.Wait()
+				return ctx.Err()
+			}
 			continue
 		}
 
-		sem <- struct{}{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		// Counted when started, not when finished, so that MaxJobs is not
+		// overshot by the jobs still in flight.
+		jobsStarted++
+		wg.Go(func() {
 			defer func() { <-sem }()
 			w.process(ctx, raw)
-			mu.Lock()
-			jobsProcessed++
-			mu.Unlock()
-		}()
+		})
 	}
 }
 
