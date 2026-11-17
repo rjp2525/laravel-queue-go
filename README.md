@@ -337,6 +337,22 @@ if batchID := job.BatchID(); batchID != "" {
 }
 ```
 
+`batch.Repository` reads and updates Laravel's `job_batches` table (same layout in Laravel 10-13; MySQL, PostgreSQL, SQLite and SQL Server are detected from the driver):
+
+```go
+repo, err := batch.NewRepository(db, "job_batches")
+
+b, err := repo.Find(ctx, job.BatchID())
+if b.Cancelled() {
+    return nil // skip, as Laravel does for jobs of a cancelled batch
+}
+b.AllowsFailures()                                // Laravel's allowFailures option
+repo.DecrementPendingJobs(ctx, b.ID)              // a job of the batch succeeded
+repo.IncrementFailedJobs(ctx, b.ID, job.UUID())   // a job of the batch failed for good
+```
+
+The worker does not update batches by itself, and a batch's `then` / `catch` / `finally` callbacks are serialized PHP closures that only a Laravel worker can run. If a Go worker handles jobs of a Laravel batch, it has to update the counters as above, and callbacks fire only when the job that completes the batch is processed by Laravel.
+
 Chained jobs:
 
 ```go
