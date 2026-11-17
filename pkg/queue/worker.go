@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -55,9 +56,9 @@ func newWorker(
 		opts.Sleep = 3 * time.Second
 	}
 
-	h := make(map[string]Handler, len(handlers))
-	for k, v := range handlers {
-		h[k] = v
+	h := maps.Clone(handlers)
+	if h == nil {
+		h = make(map[string]Handler)
 	}
 
 	return &Worker{
