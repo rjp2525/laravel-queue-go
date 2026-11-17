@@ -12,7 +12,7 @@
 - The re-encoding dropped every payload key this package does not model
   (`silenced`, `data.batchId`, `telescope_uuid`, ...).
 - `attempts` was only incremented on release. A job whose worker crashed went
-  back to the queue with the same count, so it could be retried forever, and
+  back to the queue with the same count, so it could be retried forever and
   a job with `maxTries: 3` ran four times.
 - With `BlockFor` unset the `:notify` list was never consumed and grew by one
   entry per pushed job. With `BlockFor` set, the worker waited on `:notify`
@@ -24,7 +24,7 @@
 
 The driver now runs Laravel's own `pop` script (identical in Laravel 10, 11,
 12 and 13): `attempts` is incremented inside Redis when the job is reserved,
-the reserved copy is what `Delete`/`Release` address, and each pop consumes
+the reserved copy is what `Delete`/`Release` address and each pop consumes
 one notification.
 
 | | Before | After |
@@ -42,7 +42,7 @@ one notification.
 
 1. **Handlers and listeners that use the attempt number.** `Attempts()` is now
    1-based, like `$this->attempts()` in a Laravel job. Change `== 0` checks
-   for "first run" to `== 1`, and drop any `+1` you added for display.
+   for "first run" to `== 1` and drop any `+1` you added for display.
 2. **Custom `queue.Driver` implementations.** `Pop` must now increment the
    payload's `attempts` itself and return that payload in `RawJob.Reserved`
    (keep the original in `Body`). `Job.Release` no longer increments for you.
@@ -51,7 +51,7 @@ one notification.
 3. **Reserved payloads round-trip through Redis' cjson**, exactly as they do
    under a Laravel worker: an empty array is reserved as `{}` (so `"tags":[]`
    becomes `"tags":{}`) and key order changes. `LaravelPayload` parsing accepts
-   this; if you parse `Raw().Reserved` yourself, do the same. `Raw().Body` is
+   this. If you parse `Raw().Reserved` yourself, do the same. `Raw().Body` is
    not re-encoded.
 4. **One-time cleanup (optional).** Queues that ran the previous version may
    hold leftovers:
@@ -59,6 +59,6 @@ one notification.
      were released. They will be delivered once more after `retry_after`. With
      workers stopped you can inspect and remove them with `ZRANGE` / `ZREM`.
    - `{prefix}queues:{name}:notify` may be long. It only holds wake-up
-     tokens; `DEL` it at any time.
+     tokens. `DEL` it at any time.
 
 No change is needed on the Laravel side.

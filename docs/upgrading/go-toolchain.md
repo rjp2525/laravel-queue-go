@@ -26,6 +26,6 @@ improvements without any change.
 
 ## What you need to do
 
-Nothing. If you build with Go 1.27, use 1.27.4 or newer; the 1.27.2 to 1.27.4
+Nothing. If you build with Go 1.27, use 1.27.4 or newer. The 1.27.2 to 1.27.4
 releases contain security fixes in `net/http`, `crypto/tls`, `crypto/x509`
 and the go command.

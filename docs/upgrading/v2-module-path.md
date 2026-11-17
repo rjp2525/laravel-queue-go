@@ -42,7 +42,7 @@ first installable v2 release is **v2.0.1**.
    ```
 
 Then work through the behaviour changes listed in the other guides in this
-directory, or the summary at
+directory or the summary at
 https://laravel-queue-go.reno.sh/docs/upgrading/.
 
 v1 stays available at the old path (`go get github.com/rjp2525/laravel-queue-go@v1.3.0`)

@@ -35,10 +35,10 @@ No API was removed. Builds on
    deadline regardless of `maxTries`. Remove `retryUntil` if you want the
    attempt cap.
 3. **Laravel-dispatched jobs with a `backoff`** are now delayed between
-   retries. Nothing to change; expect retries to be slower and correct.
+   retries. Nothing to change. Expect retries to be slower and correct.
 4. **`WorkerOptions.MaxTries` defaults to 0 (unlimited)**, which is what this
    package always did for payloads without `maxTries`. Laravel's
-   `queue:work` defaults to `--tries=1`; set `MaxTries: 1` to match it:
+   `queue:work` defaults to `--tries=1`. Set `MaxTries: 1` to match it:
 
    ```go
    worker := mgr.Worker(queue.WorkerOptions{

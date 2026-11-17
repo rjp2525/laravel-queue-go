@@ -12,8 +12,8 @@ delayed or reserved jobs.
 - New `PendingSize`, `DelayedSize` and `ReservedSize`, matching the methods
   Laravel 12 added.
 - The migrate script pushes due jobs in chunks of 100 per `RPUSH` instead of
-  one call per job, and returns a count instead of sending every migrated
-  payload back to the client. No behaviour change; fewer Redis calls and less
+  one call per job and returns a count instead of sending every migrated
+  payload back to the client. No behaviour change. Fewer Redis calls and less
   network traffic when many delayed jobs become due at once.
 - A negative `RedisDriverConfig.BatchSize` migrates without a limit, which is
   Laravel's own default (`migration_batch_size = -1`). The default here stays
@@ -36,6 +36,6 @@ Typical places: autoscaling on queue depth, "is the queue empty" checks in
 tests and scripts, dashboards. An idle queue with jobs scheduled for later now
 reports a non-zero `Size`.
 
-`Size` is part of the `queue.Driver` interface; custom drivers should follow
+`Size` is part of the `queue.Driver` interface. Custom drivers should follow
 the same definition. The three new methods are on `*RedisDriver` only, so
 custom drivers are not required to implement them.
