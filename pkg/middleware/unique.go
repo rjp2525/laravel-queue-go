@@ -2,10 +2,20 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
+
+// luaReleaseLock deletes the lock only if it still holds the caller's token.
+// KEYS[1] = lock key, ARGV[1] = owner token
+var luaReleaseLock = redis.NewScript(`
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+`)
 
 const (
 	uniqueKeyPrefix      = "laravel_unique_job:"
@@ -28,7 +38,12 @@ func lockMiddleware(client redis.Cmdable, keyFunc KeyFunc, ttl time.Duration, pr
 	return func(ctx context.Context, job Job, next func() error) error {
 		key := prefix + keyFunc(job)
 
-		acquired, err := client.SetNX(ctx, key, 1, ttl).Result()
+		// A random owner token makes the release safe: if the job outlives
+		// ttl, the lock expires and another worker may take it. Deleting the
+		// key unconditionally would then remove that worker's lock.
+		owner := rand.Text()
+
+		acquired, err := client.SetNX(ctx, key, owner, ttl).Result()
 		if err != nil {
 			return err
 		}
@@ -36,9 +51,13 @@ func lockMiddleware(client redis.Cmdable, keyFunc KeyFunc, ttl time.Duration, pr
 			return onConflict()
 		}
 
-		err = next()
-		_ = client.Del(ctx, key).Err()
-		return err
+		// Release even if ctx was cancelled while the job ran; a lock left
+		// behind would block the job until ttl, or forever when ttl is 0.
+		defer func() {
+			_ = luaReleaseLock.Run(context.WithoutCancel(ctx), client, []string{key}, owner).Err()
+		}()
+
+		return next()
 	}
 }
 
