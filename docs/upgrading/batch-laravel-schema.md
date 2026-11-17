@@ -1,6 +1,6 @@
 # batch: Repository now matches Laravel's job_batches table
 
-**Breaking:** yes, if you created `job_batches` with a non-Laravel schema, or
+**Breaking:** yes, if you created `job_batches` with a non-Laravel schema or
 read `Batch.Options` as JSON. Builds on
 [failed-jobs-postgres](failed-jobs-postgres.md).
 
@@ -58,7 +58,7 @@ read `Batch.Options` as JSON. Builds on
 
    PostgreSQL: the same with `EXTRACT(EPOCH FROM created_at)::int`.
 3. **If you parsed `Batch.Options` as JSON:** it is now PHP `serialize()`
-   output. Use `b.AllowsFailures()`, or decode it:
+   output. Use `b.AllowsFailures()` or decode it:
 
    ```go
    decoded, _ := phpserialize.Decode(b.Options)
@@ -66,10 +66,10 @@ read `Batch.Options` as JSON. Builds on
    ```
 
    Rows written by the previous version hold JSON in `options`. Laravel
-   treats unreadable options as empty, and `AllowsFailures()` returns false
+   treats unreadable options as empty and `AllowsFailures()` returns false
    for them. Re-create or update those batches if the flag matters.
 4. **`Cancel` now marks the batch finished** (`Finished()` is true for a
-   cancelled batch, and `Prune` removes it). Check `Cancelled()` before
+   cancelled batch and `Prune` removes it). Check `Cancelled()` before
    `Finished()` if you distinguish the two.
 5. **Wrapped SQL drivers:** pass `batch.WithDialect(dialect.Postgres)` (or
    the right one), as described in the failed job provider guide.

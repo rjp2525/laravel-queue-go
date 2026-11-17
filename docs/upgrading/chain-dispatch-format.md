@@ -1,6 +1,6 @@
 # Dispatcher: chains use Laravel's format
 
-**Breaking:** the contents of the `chained` property, and therefore of
+**Breaking:** the contents of the `chained` property and therefore of
 `job.ChainedJobs()`, for chains dispatched from Go.
 
 ## What was wrong
@@ -24,7 +24,7 @@ format:
 
 - **Laravel consumers:** nothing. Chains dispatched from Go now continue.
 - **Go code reading `job.ChainedJobs()` of Go-dispatched chains:** each entry
-  used to be a JSON queue payload; decode it as a command instead.
+  used to be a JSON queue payload. Decode it as a command instead.
 
   ```go
   // before
@@ -41,7 +41,7 @@ format:
   Entries of chains dispatched by Laravel were always serialized commands, so
   code that handled those already works this way.
 - **Jobs already on the queue** with the old format keep their old `chained`
-  contents; Laravel will fail them at the second step as before. Re-dispatch
+  contents. Laravel will fail them at the second step as before. Re-dispatch
   those chains.
 
 Unchanged: a Go worker does not dispatch the next job of a chain. If a Go

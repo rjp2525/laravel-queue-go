@@ -9,7 +9,7 @@
   `ParseLaravelVersion`, `DetectLaravelVersion`.
 - `RedisDriverConfig.LaravelVersion` and `HashTagQueues`,
   `RedisDriver.DetectLaravelVersion`, `queue.DiscoverQueues`.
-- Dispatcher option `queue.ForLaravel(v)`; payload options
+- Dispatcher option `queue.ForLaravel(v)`. Payload options
   `WithLaravelVersion`, `WithDelay`, `WithBatchID`,
   `WithDeleteWhenMissingModels`.
 - `LaravelPayload` models the keys added since Laravel 10:
@@ -61,7 +61,7 @@ The Lua scripts and the reserve/release protocol do not depend on the version.
    `LaravelVersion: queue.Laravel10` (or `Laravel11`) and drop the workaround.
 5. **Laravel 13 on Redis Cluster:** set `LaravelVersion: queue.Laravel13` or
    `HashTagQueues: true`. Laravel 13 stores `queues:{default}` on cluster
-   connections where earlier versions stored `queues:default`; without the
+   connections where earlier versions stored `queues:default`. Without the
    setting Go and Laravel read different keys.
 6. **Code that marshals a `LaravelPayload` built as a struct literal** gets
    the latest key set. Use `NewPayload(..., WithLaravelVersion(v))` to choose.
@@ -73,7 +73,7 @@ Detection looks at payload keys of a job already on the queue.
 - Laravel 11 is reported as 10 unless the job carries an
   `illuminate:log:context`. Both versions write the same payload and use the
   same prefix, so the result is equivalent.
-- Applications can add payload keys (`Queue::createPayloadUsing`), and early
+- Applications can add payload keys (`Queue::createPayloadUsing`) and early
   12.x / 13.x releases may not write the keys that identify them yet.
 - The prefix and the cluster key layout are needed to find the queue in the
   first place, so they follow the configured version, not the detected one.

@@ -5,7 +5,7 @@
 ## What was wrong
 
 `Delete`, `Release` and the failed-job insert ran on the context passed to
-`worker.Run`. When that context was cancelled (SIGTERM in `lqworker`, or any
+`worker.Run`. When that context was cancelled (SIGTERM in `lqworker` or any
 `cancel()` in your own program), those calls failed with `context canceled`:
 
 - a job that **finished successfully** during shutdown stayed in `:reserved`

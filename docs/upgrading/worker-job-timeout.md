@@ -15,7 +15,7 @@ at once.
 ## What changed
 
 - The worker derives the handler's `ctx` with a deadline when the job has a
-  timeout: the payload's `timeout` (seconds), or the new
+  timeout: the payload's `timeout` (seconds) or the new
   `WorkerOptions.Timeout` for payloads without one. A payload `timeout` of
   `0` disables it.
 - A handler that returns an error after its deadline fails the attempt with a
@@ -30,7 +30,7 @@ at once.
 
 1. **Make handlers honour `ctx`.** The timeout is cooperative: Go cannot kill
    a goroutine. Pass `ctx` to database calls, HTTP requests and Redis
-   commands, and check `ctx.Err()` in long loops. A handler that ignores `ctx`
+   commands and check `ctx.Err()` in long loops. A handler that ignores `ctx`
    behaves as before (no timeout).
 2. **Check jobs that already carry a `timeout`.** Handlers that do honour
    `ctx` will now be interrupted at that timeout. If a Go handler legitimately
@@ -54,5 +54,5 @@ at once.
 behaviour. Laravel's `queue:work` defaults to `--timeout=60`.
 
 One difference from Laravel remains: PHP kills the worker process at the
-timeout; a Go handler that never returns cannot be killed and will occupy its
+timeout. A Go handler that never returns cannot be killed and will occupy its
 worker slot until it does.

@@ -19,7 +19,7 @@ not work:
 
 ## What changed
 
-- `REDIS_HOST` may be a bare host; `REDIS_PORT` (default 6379) is appended.
+- `REDIS_HOST` may be a bare host. `REDIS_PORT` (default 6379) is appended.
   `host:port` in `REDIS_HOST` still works and wins over `REDIS_PORT`. IPv6
   hosts are bracketed.
 - New `Config.RedisUsername` from `REDIS_USERNAME`.

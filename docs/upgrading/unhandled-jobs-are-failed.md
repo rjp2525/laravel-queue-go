@@ -23,7 +23,7 @@ Both are now *failed* jobs, as an unresolvable job class is in Laravel:
   `php artisan queue:retry` can put it back once a worker that understands it
   is running;
 - `events.JobFailed` fires. For a missing handler the error wraps
-  `queue.ErrNoHandler`; for an unparseable payload the event has no job name
+  `queue.ErrNoHandler`. For an unparseable payload the event has no job name
   or UUID, only the queue and the parse error.
 
 ## What you need to do
