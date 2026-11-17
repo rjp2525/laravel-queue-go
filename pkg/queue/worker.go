@@ -267,7 +267,8 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 	}
 
 	if job.alreadyExceedsMaxAttempts(w.options.MaxTries) {
-		w.fail(ctx, job, fmt.Errorf("%s: %w", job.DisplayName(), ErrMaxAttemptsExceeded), 0)
+		// Uncancellable: the failure must be recorded even during shutdown.
+		w.fail(context.WithoutCancel(ctx), job, fmt.Errorf("%s: %w", job.DisplayName(), ErrMaxAttemptsExceeded), 0)
 		return
 	}
 
