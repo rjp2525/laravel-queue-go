@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -60,9 +61,9 @@ func newWorker(
 		opts.Sleep = 3 * time.Second
 	}
 
-	h := make(map[string]Handler, len(handlers))
-	for k, v := range handlers {
-		h[k] = v
+	h := maps.Clone(handlers)
+	if h == nil {
+		h = make(map[string]Handler)
 	}
 
 	return &Worker{
@@ -271,12 +272,6 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 	if err != nil {
 		w.logger.Error("failed to parse job", "error", err)
 		_ = w.driver.Delete(context.WithoutCancel(ctx), raw)
-		return
-	}
-
-	if job.alreadyExceedsMaxAttempts(w.options.MaxTries) {
-		// Uncancellable: the failure must be recorded even during shutdown.
-		w.fail(context.WithoutCancel(ctx), job, fmt.Errorf("%s: %w", job.DisplayName(), ErrMaxAttemptsExceeded), 0)
 		return
 	}
 

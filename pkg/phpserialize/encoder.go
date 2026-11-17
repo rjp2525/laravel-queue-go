@@ -2,9 +2,10 @@ package phpserialize
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -153,12 +154,7 @@ func encodeSlice(b *strings.Builder, val []any) error {
 }
 
 func encodeSortedProperties(b *strings.Builder, properties map[string]any) error {
-	keys := make([]string, 0, len(properties))
-	for k := range properties {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(properties)) {
 		encodeString(b, k)
 		if err := encodeValue(b, properties[k]); err != nil {
 			return err
