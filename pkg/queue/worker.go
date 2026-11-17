@@ -295,9 +295,7 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 		return
 	}
 
-	err = w.pipeline.Then(ctx, job, func() error {
-		return handler(ctx, job)
-	})
+	err = w.runHandler(ctx, job, handler)
 
 	duration := time.Since(start)
 
@@ -329,6 +327,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		Attempt: job.Attempts(),
 		Error:   jobErr,
 	})
+
+	if failsOnTimeout(job, jobErr) {
+		w.fail(ctx, job, jobErr, duration)
+		return
+	}
 
 	var releaseErr *middleware.ReleaseError
 	if errors.As(jobErr, &releaseErr) {

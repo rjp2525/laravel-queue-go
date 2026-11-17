@@ -115,6 +115,7 @@ queue.WorkerOptions{
     Concurrency: 4,              // parallel goroutines (1 = serial)
     MaxJobs:     1000,           // stop after N jobs (0 = unlimited)
     MaxTime:     3600,           // stop after N seconds (0 = unlimited)
+    Timeout:     0,              // timeout for jobs without one, like --timeout (0 = none; Laravel defaults to 60s)
     Sleep:       3*time.Second,  // poll interval when queue is empty
     StopOnEmpty: false,          // exit when queue drains
     MaxTries:    0,              // attempts for jobs without maxTries, like --tries (0 = unlimited; Laravel defaults to 1)
@@ -235,17 +236,16 @@ The middleware pipeline wraps job execution. Each middleware calls `next()` to p
 import "github.com/rjp2525/laravel-queue-go/pkg/middleware"
 ```
 
-`Timeout` enforces a per-job timeout:
+Job timeouts need no middleware. The worker cancels the handler's `ctx` when the payload's `timeout` (or `WorkerOptions.Timeout`) expires, and fails the job instead of retrying it when the payload has `failOnTimeout`. Handlers must watch `ctx` for the timeout to take effect:
 
 ```go
-middleware.Timeout(func(job middleware.Job) *time.Duration {
-    if t := job.Timeout(); t != nil {
-        d := time.Duration(*t) * time.Second
-        return &d
-    }
-    return nil
+mgr.Register(`App\Jobs\Export`, func(ctx context.Context, job *queue.Job) error {
+    req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil) // aborted at the timeout
+    // ...
 })
 ```
+
+`middleware.Timeout` is deprecated: it cannot cancel the handler, only stop waiting for it.
 
 `RateLimited` throttles processing to N jobs per decay window:
 
@@ -280,7 +280,7 @@ middleware.ThrottlesExceptions(redisClient, func(job middleware.Job) string {
 Apply middleware globally:
 
 ```go
-mgr.Use(middleware.Timeout(timeoutGetter), middleware.RateLimited(rdb, "api", 60, time.Minute))
+mgr.Use(middleware.RateLimited(rdb, "api", 60, time.Minute))
 ```
 
 ### Events
