@@ -36,7 +36,7 @@ All of `queue.WorkerOptions` is described on the [workers](/docs/workers/#option
 `config.FromEnv` reads settings from environment variables and gives you a struct to build from. It understands the variables a Laravel `.env` already has, so a Go worker deployed next to the app can share its environment.
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/config"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/config"
 
 cfg, err := config.Load()
 if err != nil {

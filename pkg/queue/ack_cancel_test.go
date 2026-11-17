@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/failed"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/failed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

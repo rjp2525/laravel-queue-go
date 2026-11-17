@@ -16,15 +16,17 @@ Your Laravel app needs `QUEUE_CONNECTION=redis`. Either Redis client (`phpredis`
 ## Install
 
 ```bash
-go get github.com/rjp2525/laravel-queue-go
+go get github.com/rjp2525/laravel-queue-go/v2
 ```
+
+The `/v2` at the end is part of the module path, and it's in every import too. If you're coming from v1, the [upgrade guide](/docs/upgrading/) covers the switch.
 
 The package builds on [go-redis](https://github.com/redis/go-redis). You create the Redis client yourself and hand it over, so connection pooling, TLS, Sentinel and Cluster are configured the way you already know.
 
 ```go
 import (
     "github.com/redis/go-redis/v9"
-    "github.com/rjp2525/laravel-queue-go/pkg/queue"
+    "github.com/rjp2525/laravel-queue-go/v2/pkg/queue"
 )
 
 rdb := redis.NewClient(&redis.Options{Addr: "127.0.0.1:6379"})

@@ -6,7 +6,7 @@ description: Hook into the job lifecycle for logging, metrics and alerting.
 The worker announces what it's doing. Listen in to feed your logs, metrics or pager.
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/events"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/events"
 
 mgr.On(events.JobProcessed, func(e events.Event) {
     metrics.Timing("jobs.duration", e.Duration, "job:"+e.JobName)

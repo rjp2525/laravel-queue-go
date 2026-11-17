@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rjp2525/laravel-queue-go/pkg/dialect"
-	"github.com/rjp2525/laravel-queue-go/pkg/internal/dbutil"
-	"github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/dialect"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/internal/dbutil"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
 )
 
 // Repository reads and writes Laravel's job_batches table, in the layout

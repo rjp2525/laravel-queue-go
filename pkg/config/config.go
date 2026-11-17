@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/queue"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/queue"
 )
 
 type Config struct {

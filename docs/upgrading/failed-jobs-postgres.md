@@ -29,7 +29,7 @@ If your `*sql.DB` uses a **wrapped driver** (OpenTelemetry `otelsql`,
 to `?`. Tell the provider what is underneath:
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/dialect"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/dialect"
 
 provider, err := failed.NewDatabaseProvider(db, "failed_jobs",
     failed.WithDialect(dialect.Postgres))

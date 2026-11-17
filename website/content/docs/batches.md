@@ -16,7 +16,7 @@ if id := job.BatchID(); id != "" {
 ## The repository
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/batch"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/batch"
 
 repo, err := batch.NewRepository(db, "job_batches")
 ```
