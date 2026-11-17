@@ -1,9 +1,13 @@
 package queue
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +16,7 @@ import (
 
 type RedisDriver struct {
 	client     redis.Cmdable
+	version    LaravelVersion
 	keys       *Keys
 	retryAfter time.Duration
 	blockFor   time.Duration
@@ -28,13 +33,23 @@ type RedisDriverConfig struct {
 	RetryAfter time.Duration
 	BlockFor   time.Duration
 	BatchSize  int
+
+	// LaravelVersion is the major version of the Laravel app sharing the
+	// queue. It selects the default Prefix (when Prefix is empty) and the
+	// payload format dispatchers write, and on a *redis.ClusterClient it
+	// turns on Laravel 13's hash-tagged keys. Leave it as LaravelAuto to
+	// detect the version from jobs already on the queue.
+	LaravelVersion LaravelVersion
+	// HashTagQueues forces hash-tagged queue keys ("queues:{name}"), for a
+	// Laravel 13 app on Redis Cluster when LaravelVersion is left on auto.
+	HashTagQueues bool
 }
 
 func NewRedisDriver(client redis.Cmdable, cfg RedisDriverConfig) *RedisDriver {
 	if cfg.NoPrefix {
 		cfg.Prefix = ""
 	} else if cfg.Prefix == "" {
-		cfg.Prefix = DefaultRedisPrefix
+		cfg.Prefix = cfg.LaravelVersion.RedisPrefix("")
 	}
 	if cfg.RetryAfter == 0 {
 		cfg.RetryAfter = 90 * time.Second
@@ -42,9 +57,18 @@ func NewRedisDriver(client redis.Cmdable, cfg RedisDriverConfig) *RedisDriver {
 	if cfg.BatchSize == 0 {
 		cfg.BatchSize = 100
 	}
+	keys := NewKeys(cfg.Prefix)
+	if _, cluster := client.(*redis.ClusterClient); cluster && cfg.LaravelVersion >= Laravel13 {
+		keys.HashTag = true
+	}
+	if cfg.HashTagQueues {
+		keys.HashTag = true
+	}
+
 	return &RedisDriver{
 		client:         client,
-		keys:           NewKeys(cfg.Prefix),
+		version:        cfg.LaravelVersion,
+		keys:           keys,
 		retryAfter:     cfg.RetryAfter,
 		blockFor:       cfg.BlockFor,
 		batchSize:      cfg.BatchSize,
@@ -237,6 +261,111 @@ func (d *RedisDriver) migrateFrom(ctx context.Context, from, to, notify string, 
 		[]string{from, to, notify},
 		now, d.batchSize,
 	).Err()
+}
+
+// DetectLaravelVersion returns the configured LaravelVersion, or, when that
+// is LaravelAuto, the version inferred from the first job found on the queue
+// (ready, delayed or reserved). It returns LaravelAuto when the queue holds
+// no job to look at. See the package-level DetectLaravelVersion for how
+// reliable the inference is.
+func (d *RedisDriver) DetectLaravelVersion(ctx context.Context, queue string) (LaravelVersion, error) {
+	if d.version != LaravelAuto {
+		return d.version, nil
+	}
+
+	peek := []func() (string, error){
+		func() (string, error) { return d.client.LIndex(ctx, d.keys.Ready(queue), 0).Result() },
+		func() (string, error) { return firstMember(d.client.ZRange(ctx, d.keys.Delayed(queue), 0, 0).Result()) },
+		func() (string, error) {
+			return firstMember(d.client.ZRange(ctx, d.keys.Reserved(queue), 0, 0).Result())
+		},
+	}
+	for _, next := range peek {
+		payload, err := next()
+		if errors.Is(err, redis.Nil) {
+			continue
+		}
+		if err != nil {
+			return LaravelAuto, fmt.Errorf("detect laravel version on %s: %w", queue, err)
+		}
+		if v, ok := DetectLaravelVersion([]byte(payload)); ok {
+			return v, nil
+		}
+	}
+	return LaravelAuto, nil
+}
+
+func firstMember(members []string, err error) (string, error) {
+	if err != nil {
+		return "", err
+	}
+	if len(members) == 0 {
+		return "", redis.Nil
+	}
+	return members[0], nil
+}
+
+// QueueLocation is a queue found in Redis by DiscoverQueues.
+type QueueLocation struct {
+	Prefix string // key prefix, e.g. "laravel_database_"
+	Queue  string // queue name, e.g. "default"
+}
+
+// DiscoverQueues scans Redis for Laravel queue keys and reports the prefix
+// and name of every queue that currently holds jobs. Use it to find out which
+// prefix an application really uses; an empty queue has no keys and is not
+// found.
+//
+// It walks the keyspace with SCAN, which is safe on a live server but takes
+// time proportional to the number of keys. On a *redis.ClusterClient every
+// master is scanned.
+func DiscoverQueues(ctx context.Context, client redis.Cmdable) ([]QueueLocation, error) {
+	seen := make(map[QueueLocation]struct{})
+
+	scan := func(ctx context.Context, c redis.Cmdable) error {
+		iter := c.Scan(ctx, 0, "*queues:*", 1000).Iterator()
+		for iter.Next(ctx) {
+			if loc, ok := parseQueueKey(iter.Val()); ok {
+				seen[loc] = struct{}{}
+			}
+		}
+		return iter.Err()
+	}
+
+	var err error
+	if cluster, ok := client.(*redis.ClusterClient); ok {
+		var mu sync.Mutex
+		err = cluster.ForEachMaster(ctx, func(ctx context.Context, node *redis.Client) error {
+			mu.Lock()
+			defer mu.Unlock()
+			return scan(ctx, node)
+		})
+	} else {
+		err = scan(ctx, client)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("discover queues: %w", err)
+	}
+
+	return slices.SortedFunc(maps.Keys(seen), func(a, b QueueLocation) int {
+		return cmp.Or(cmp.Compare(a.Prefix, b.Prefix), cmp.Compare(a.Queue, b.Queue))
+	}), nil
+}
+
+// parseQueueKey splits "{prefix}queues:{name}[:delayed|:reserved|:notify]".
+func parseQueueKey(key string) (QueueLocation, bool) {
+	prefix, name, found := strings.Cut(key, "queues:")
+	if !found || name == "" {
+		return QueueLocation{}, false
+	}
+	for _, suffix := range []string{":delayed", ":reserved", ":notify"} {
+		name = strings.TrimSuffix(name, suffix)
+	}
+	// Laravel 13 on Redis Cluster stores "queues:{name}".
+	if len(name) > 2 && name[0] == '{' && name[len(name)-1] == '}' {
+		name = name[1 : len(name)-1]
+	}
+	return QueueLocation{Prefix: prefix, Queue: name}, true
 }
 
 func (d *RedisDriver) Close() error {

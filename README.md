@@ -398,7 +398,7 @@ All settings can be loaded from environment variables. The loader also understan
 | `REDIS_USERNAME` | (empty) | Redis ACL username |
 | `REDIS_PASSWORD` | (empty) | Redis password |
 | `REDIS_DB` | `0` | Redis database number |
-| `REDIS_PREFIX` | `laravel-database-` | Redis key prefix |
+| `REDIS_PREFIX` | derived, see below | Redis key prefix |
 | `QUEUE_NAME` | `default` | Default queue name |
 | `QUEUE_RETRY_AFTER` | `90s` | Reserved job visibility timeout |
 | `QUEUE_BLOCK_FOR` | `5s` | BLPOP notification timeout |
@@ -410,6 +410,8 @@ All settings can be loaded from environment variables. The loader also understan
 | `QUEUE_FAILED_TABLE` | `failed_jobs` | Failed jobs table name |
 | `QUEUE_FAILED_DRIVER` | `database` | Failed job storage driver |
 | `DATABASE_URL` | (empty) | Database DSN for failed jobs |
+| `LARAVEL_VERSION` | `auto` | Laravel major version sharing the queue (`10`-`13`, or `auto`) |
+| `APP_NAME` | (empty) | Laravel `APP_NAME`; used to derive the Redis prefix when `REDIS_PREFIX` is unset |
 
 ```go
 import "github.com/rjp2525/laravel-queue-go/pkg/config"
@@ -418,7 +420,7 @@ cfg := config.FromEnv()        // invalid values silently keep their defaults
 cfg, err := config.Load()      // same, but err names every invalid variable
 ```
 
-The default Redis prefix (`laravel-database-`) matches what Laravel generates from `Str::slug(env('APP_NAME', 'laravel')).'-database-'`. If your Laravel app has a custom `APP_NAME`, set `REDIS_PREFIX` to match.
+When `REDIS_PREFIX` is not set, the prefix is derived the way Laravel's `config/database.php` does it: `{slug(APP_NAME)}_database_` for Laravel 10 and 11, `{slug(APP_NAME)}-database-` for 12 and 13 (and for `auto`). The prefix is part of the app's own config file, so an app created on Laravel 10 and upgraded since still uses the underscore form. If jobs do not show up, check the real value with `php artisan tinker --execute="echo config('database.redis.options.prefix');"` or `queue.DiscoverQueues`.
 
 ### CLI binary (`lqworker`)
 
@@ -432,6 +434,7 @@ lqworker \
   --concurrency=4 \
   --redis=127.0.0.1:6379 \
   --prefix=laravel-database- \
+  --laravel-version=12 \
   --max-jobs=1000 \
   --max-time=3600
 ```
@@ -446,10 +449,49 @@ On the first `SIGTERM` / `SIGINT` the worker stops taking jobs and lets the runn
 
 | Laravel Version | Status |
 |---|---|
+| 10.x | Supported |
+| 11.x | Supported |
 | 12.x | Supported |
 | 13.x | Supported |
 
-The Go driver matches Laravel's Redis key layout (`{prefix}queues:{name}`, `:delayed`, `:reserved`, `:notify`), Lua scripts, and JSON payload envelope format. Go workers and Laravel workers can run side-by-side on the same queues.
+The Redis key layout (`{prefix}queues:{name}`, `:delayed`, `:reserved`, `:notify`) and the `pop`, `release` and `migrate` Lua scripts are identical in all four versions, so Go and Laravel workers can share a queue on any of them. What differs is the job payload, the default key prefix and the cluster key layout:
+
+| | 10 | 11 | 12 | 13 |
+|---|---|---|---|---|
+| Default prefix for `APP_NAME=Laravel` | `laravel_database_` | `laravel_database_` | `laravel-database-` | `laravel-database-` |
+| `illuminate:log:context` in payload | | when Context is used | when Context is used | when Context is used |
+| `createdAt`, `delay`, `data.batchId` in payload | | | yes | yes |
+| `countCrashesAsExceptions`, `deleteWhenMissingModels` in payload | | | | yes |
+| Keys on Redis Cluster | `queues:name` | `queues:name` | `queues:name` | `queues:{name}` |
+
+### Selecting the version
+
+Set it on the driver. Dispatchers created from the driver write that version's payload, and the default prefix and cluster key layout follow it:
+
+```go
+driver := queue.NewRedisDriver(rdb, queue.RedisDriverConfig{
+    LaravelVersion: queue.Laravel11, // Laravel10 ... Laravel13, default LaravelAuto
+})
+```
+
+Or per dispatcher with `queue.ForLaravel(queue.Laravel12)`, from the environment with `LARAVEL_VERSION=12`, or on the CLI with `--laravel-version=12`. `queue.ParseLaravelVersion` accepts `"12"`, `"12.x"`, `"v12.3.1"` and `"auto"`.
+
+### Auto-detection
+
+With `LaravelAuto` (the default) a dispatcher looks at a job already on the queue, ready, delayed or reserved, and adopts the version that wrote it. While the queue is empty it writes the latest format, which Laravel 10-12 accept because they ignore payload keys they do not know, and checks again every 30 seconds.
+
+```go
+v, _ := driver.DetectLaravelVersion(ctx, "default") // LaravelAuto if the queue is empty
+v, ok := queue.DetectLaravelVersion(rawPayload)      // from any payload
+v := job.LaravelVersion()                            // inside a handler
+queues, _ := queue.DiscoverQueues(ctx, rdb)          // [{Prefix: "laravel_database_", Queue: "default"}, ...]
+```
+
+Detection reads payload keys, so it has limits:
+
+- Laravel 11 is only recognised when the job carries a Context; otherwise it reports 10. Both write the same payload, so nothing changes in practice.
+- An app can add its own keys with `Queue::createPayloadUsing`, and early 12.x / 13.x releases may predate the keys that identify them. Pin the version if detection gets it wrong.
+- The Redis prefix and the cluster key layout cannot be detected from a queue that has not been found yet. On Redis Cluster with Laravel 13, set `LaravelVersion: queue.Laravel13` (or `HashTagQueues: true`).
 
 ## Known limitations
 

@@ -4,15 +4,69 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
 )
 
 type Dispatcher struct {
-	driver Driver
-	queue  string
-	format CommandFormat
+	driver  Driver
+	queue   string
+	format  CommandFormat
+	version LaravelVersion
+
+	// Result of auto-detection, see laravelVersion.
+	detectMu   sync.Mutex
+	detected   LaravelVersion
+	lastProbed time.Time
+}
+
+// VersionDetector is implemented by drivers that can tell which Laravel
+// version shares their queue. *RedisDriver implements it.
+type VersionDetector interface {
+	DetectLaravelVersion(ctx context.Context, queue string) (LaravelVersion, error)
+}
+
+// detectInterval is how often an auto-detecting dispatcher looks at the
+// queue again while it has not found a job to learn the version from.
+const detectInterval = 30 * time.Second
+
+// ForLaravel sets the Laravel version whose payload format the dispatcher
+// writes. The default, LaravelAuto, asks the driver: a RedisDriver answers
+// with its configured LaravelVersion or detects it from jobs already on the
+// queue. Until a version is known the latest format is written, which older
+// Laravel versions accept.
+func ForLaravel(v LaravelVersion) DispatcherOption {
+	return func(d *Dispatcher) { d.version = v }
+}
+
+// laravelVersion resolves the payload format for a dispatch to queue.
+func (d *Dispatcher) laravelVersion(ctx context.Context, queue string) LaravelVersion {
+	if d.version != LaravelAuto {
+		return d.version
+	}
+	detector, ok := d.driver.(VersionDetector)
+	if !ok {
+		return LatestLaravel
+	}
+
+	d.detectMu.Lock()
+	defer d.detectMu.Unlock()
+	if d.detected != LaravelAuto {
+		return d.detected
+	}
+	if !d.lastProbed.IsZero() && time.Since(d.lastProbed) < detectInterval {
+		return LatestLaravel
+	}
+	d.lastProbed = time.Now()
+
+	// Detection is best effort: a failed probe must not fail the dispatch.
+	if v, err := detector.DetectLaravelVersion(ctx, queue); err == nil && v != LaravelAuto {
+		d.detected = v
+		return v
+	}
+	return LatestLaravel
 }
 
 type DispatcherOption func(*Dispatcher)
@@ -53,7 +107,16 @@ func (d *Dispatcher) DispatchWithOptions(ctx context.Context, dopts DispatchOpti
 		return fmt.Errorf("serialize command: %w", err)
 	}
 
-	payloadOpts := make([]PayloadOption, 0, 8)
+	queue := dopts.Queue
+	if queue == "" {
+		queue = d.queue
+	}
+
+	payloadOpts := make([]PayloadOption, 0, 10)
+	payloadOpts = append(payloadOpts, WithLaravelVersion(d.laravelVersion(ctx, queue)))
+	if dopts.Delay > 0 {
+		payloadOpts = append(payloadOpts, WithDelay(dopts.Delay))
+	}
 	if dopts.MaxTries != nil {
 		payloadOpts = append(payloadOpts, WithMaxTries(*dopts.MaxTries))
 	}
@@ -94,11 +157,6 @@ func (d *Dispatcher) DispatchWithOptions(ctx context.Context, dopts DispatchOpti
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	queue := dopts.Queue
-	if queue == "" {
-		queue = d.queue
-	}
-
 	if dopts.Delay > 0 {
 		_, err = d.driver.Later(ctx, queue, dopts.Delay, data)
 	} else {
@@ -113,7 +171,11 @@ func (d *Dispatcher) dispatch(ctx context.Context, jobName string, args map[stri
 		return fmt.Errorf("serialize command: %w", err)
 	}
 
-	payload := NewPayload(jobName, command, opts...)
+	defaults := []PayloadOption{WithLaravelVersion(d.laravelVersion(ctx, d.queue))}
+	if delay > 0 {
+		defaults = append(defaults, WithDelay(delay))
+	}
+	payload := NewPayload(jobName, command, append(defaults, opts...)...)
 
 	data, err := json.Marshal(payload)
 	if err != nil {

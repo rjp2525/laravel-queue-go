@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rjp2525/laravel-queue-go/pkg/queue"
 )
 
 type Config struct {
@@ -36,6 +38,13 @@ type Config struct {
 
 	// Database (for failed_jobs + batches)
 	DatabaseDSN string
+
+	// LaravelVersion is the major version of the Laravel app sharing the
+	// queue (LARAVEL_VERSION). queue.LaravelAuto detects it from queued jobs.
+	LaravelVersion queue.LaravelVersion
+	// AppName is the Laravel APP_NAME, used to derive RedisPrefix when
+	// REDIS_PREFIX is not set.
+	AppName string
 }
 
 func DefaultConfig() *Config {
@@ -96,6 +105,19 @@ func FromEnv() *Config {
 	envString(&c.FailedJobsDriver, "QUEUE_FAILED_DRIVER")
 	if v := os.Getenv("DATABASE_URL"); v != "" {
 		c.DatabaseDSN = v
+	}
+	if v := os.Getenv("LARAVEL_VERSION"); v != "" {
+		if lv, err := queue.ParseLaravelVersion(v); err == nil {
+			c.LaravelVersion = lv
+		}
+	}
+	c.AppName = os.Getenv("APP_NAME")
+
+	// Without an explicit REDIS_PREFIX, use the prefix Laravel itself derives
+	// from APP_NAME: "{slug}_database_" on Laravel 10/11, "{slug}-database-"
+	// on 12/13.
+	if os.Getenv("REDIS_PREFIX") == "" {
+		c.RedisPrefix = c.LaravelVersion.RedisPrefix(c.AppName)
 	}
 
 	return c
