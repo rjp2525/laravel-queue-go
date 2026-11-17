@@ -416,7 +416,11 @@ lqworker \
   --max-time=3600
 ```
 
-All flags can also be set via environment variables. The binary registers a default handler that logs received jobs. For custom handlers, import the library and build your own binary.
+All flags can also be set via environment variables. Time flags (`--sleep`, `--retry-after`, `--block-for`, `--shutdown-timeout`) take seconds like `queue:work` (`--sleep=3`) or a Go duration (`--sleep=500ms`).
+
+On the first `SIGTERM` / `SIGINT` the worker stops taking jobs and lets the running ones finish. A second signal, or `--shutdown-timeout` running out, cancels them.
+
+> **Warning:** `lqworker` has no job handlers. Its default handler logs each job and acknowledges it, which removes the job from the queue. Use it to check connectivity or to drain a test queue, not on a queue whose jobs you need. For real work, import the library and register handlers in your own binary.
 
 ## Laravel compatibility
 
