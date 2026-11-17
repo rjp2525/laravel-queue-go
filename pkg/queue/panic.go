@@ -38,15 +38,19 @@ func (e *PanicError) Format(f fmt.State, verb rune) {
 	fmt.Fprint(f, e.Error())
 }
 
-// runHandler runs the middleware pipeline and the handler, converting a panic
-// in either into a *PanicError.
+// runHandler runs the middleware pipeline and the handler under the job's
+// timeout, converting a panic in either into a *PanicError.
 func (w *Worker) runHandler(ctx context.Context, job *Job, handler Handler) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = &PanicError{Value: r, Stack: debug.Stack()}
 		}
 	}()
-	return w.pipeline.Then(ctx, job, func() error {
+	ctx, cancel, timeoutErr := w.withJobTimeout(ctx, job)
+	defer cancel()
+
+	err = w.pipeline.Then(ctx, job, func() error {
 		return handler(ctx, job)
 	})
+	return timedOut(ctx, timeoutErr, err)
 }

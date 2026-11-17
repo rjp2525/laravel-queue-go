@@ -22,7 +22,8 @@ type WorkerOptions struct {
 	Queue       string
 	Concurrency int
 	MaxJobs     int
-	MaxTime     int // seconds
+	MaxTime     int           // seconds
+	Timeout     time.Duration // for jobs whose payload has no timeout, like --timeout (0 = none)
 	Sleep       time.Duration
 	StopOnEmpty bool
 }
