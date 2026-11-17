@@ -66,7 +66,7 @@ func (d *RedisDriver) Push(ctx context.Context, queue string, payload []byte) (s
 func (d *RedisDriver) Later(ctx context.Context, queue string, delay time.Duration, payload []byte) (string, error) {
 	availableAt := float64(time.Now().Add(delay).Unix())
 	err := luaLater.Run(ctx, d.client,
-		[]string{d.keys.Delayed(queue), d.keys.Notify(queue)},
+		[]string{d.keys.Delayed(queue)},
 		availableAt, string(payload),
 	).Err()
 	if err != nil {
@@ -83,15 +83,18 @@ func (d *RedisDriver) Pop(ctx context.Context, queue string) (*RawJob, error) {
 		}
 	}
 
-	// Try blocking pop on the notify queue if blockFor is set.
-	if d.blockFor > 0 {
-		_, err := d.client.BLPop(ctx, d.blockFor, d.keys.Notify(queue)).Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return nil, err
-			}
-			// Non-fatal — fall through to direct pop.
+	// Same order as Laravel's RedisQueue::retrieveNextJob: take a job if one
+	// is ready, and only block on the notify list when the queue is empty.
+	job, err := d.popFromQueue(ctx, queue)
+	if err != nil || job != nil || d.blockFor <= 0 {
+		return job, err
+	}
+
+	if err := d.client.BLPop(ctx, d.blockFor, d.keys.Notify(queue)).Err(); err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, nil // timed out with nothing pushed
 		}
+		return nil, fmt.Errorf("wait for job on %s: %w", queue, err)
 	}
 
 	return d.popFromQueue(ctx, queue)
@@ -109,28 +112,38 @@ func (d *RedisDriver) shouldMigrate(queue string) bool {
 }
 
 func (d *RedisDriver) popFromQueue(ctx context.Context, queue string) (*RawJob, error) {
-	reservedUntil := float64(time.Now().Add(d.retryAfter).Unix())
+	reservedUntil := time.Now().Add(d.retryAfter)
 
 	result, err := luaPop.Run(ctx, d.client,
-		[]string{d.keys.Ready(queue), d.keys.Reserved(queue)},
-		reservedUntil,
-	).Result()
+		[]string{d.keys.Ready(queue), d.keys.Reserved(queue), d.keys.Notify(queue)},
+		float64(reservedUntil.Unix()),
+	).Slice()
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("pop: %w", err)
+		return nil, fmt.Errorf("pop from %s: %w", queue, err)
 	}
 
-	body, ok := result.(string)
+	// The script returns {job, reserved}; an empty queue yields Lua false for
+	// both, which arrives as nil (RESP2) or false (RESP3).
+	if len(result) < 2 {
+		return nil, nil
+	}
+	body, ok := result[0].(string)
+	if !ok {
+		return nil, nil
+	}
+	reserved, ok := result[1].(string)
 	if !ok {
 		return nil, nil
 	}
 
 	return &RawJob{
 		Body:          body,
+		Reserved:      reserved,
 		Queue:         queue,
-		ReservedUntil: time.Now().Add(d.retryAfter),
+		ReservedUntil: reservedUntil,
 	}, nil
 }
 
@@ -138,7 +151,7 @@ func (d *RedisDriver) popFromQueue(ctx context.Context, queue string) (*RawJob, 
 func (d *RedisDriver) Delete(ctx context.Context, job *RawJob) error {
 	err := luaDelete.Run(ctx, d.client,
 		[]string{d.keys.Reserved(job.Queue)},
-		job.Body,
+		job.reserved(),
 	).Err()
 	if err != nil {
 		return fmt.Errorf("delete from reserved: %w", err)
@@ -151,7 +164,7 @@ func (d *RedisDriver) Release(ctx context.Context, job *RawJob, delay time.Durat
 	availableAt := float64(time.Now().Add(delay).Unix())
 	err := luaRelease.Run(ctx, d.client,
 		[]string{d.keys.Delayed(job.Queue), d.keys.Reserved(job.Queue)},
-		job.Body, availableAt,
+		job.reserved(), availableAt,
 	).Err()
 	if err != nil {
 		return fmt.Errorf("release job: %w", err)

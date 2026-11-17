@@ -13,27 +13,40 @@ redis.call('rpush', KEYS[2], 1)
 return true
 `)
 
-// KEYS[1] = queues:{name}:delayed, KEYS[2] = queues:{name}:notify
+// KEYS[1] = queues:{name}:delayed
 // ARGV[1] = available_at timestamp, ARGV[2] = payload JSON
+//
+// Delayed jobs are not announced on the notify list here: the migrate script
+// pushes one notification per job when it moves them to the ready list.
 var luaLater = redis.NewScript(`
 redis.call('zadd', KEYS[1], ARGV[1], ARGV[2])
-redis.call('rpush', KEYS[2], 1)
 return true
 `)
 
-// KEYS[1] = queues:{name}, KEYS[2] = queues:{name}:reserved
+// luaPop is Laravel's LuaScripts::pop(), unchanged across Laravel 10-13.
+// It increments "attempts" inside Redis and stores that re-encoded payload in
+// the reserved set, so a job whose worker dies still counts the attempt. It
+// returns {job, reserved}: the payload as pushed and the reserved member.
+//
+// KEYS[1] = queues:{name}, KEYS[2] = queues:{name}:reserved, KEYS[3] = queues:{name}:notify
 // ARGV[1] = reserved_until timestamp
 var luaPop = redis.NewScript(`
 local job = redis.call('lpop', KEYS[1])
-if job ~= false then
-    redis.call('zadd', KEYS[2], ARGV[1], job)
-    return job
+local reserved = false
+
+if(job ~= false) then
+    reserved = cjson.decode(job)
+    reserved['attempts'] = reserved['attempts'] + 1
+    reserved = cjson.encode(reserved)
+    redis.call('zadd', KEYS[2], ARGV[1], reserved)
+    redis.call('lpop', KEYS[3])
 end
-return false
+
+return {job, reserved}
 `)
 
 // KEYS[1] = queues:{name}:delayed, KEYS[2] = queues:{name}:reserved
-// ARGV[1] = payload, ARGV[2] = available_at timestamp
+// ARGV[1] = reserved payload, ARGV[2] = available_at timestamp
 var luaRelease = redis.NewScript(`
 redis.call('zrem', KEYS[2], ARGV[1])
 redis.call('zadd', KEYS[1], ARGV[2], ARGV[1])
@@ -42,7 +55,7 @@ return true
 
 // luaDelete removes a job from the reserved set (ACK).
 // KEYS[1] = queues:{name}:reserved
-// ARGV[1] = payload
+// ARGV[1] = reserved payload
 var luaDelete = redis.NewScript(`
 redis.call('zrem', KEYS[1], ARGV[1])
 return true

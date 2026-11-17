@@ -196,6 +196,7 @@ func TestNewPayloadWithOptions(t *testing.T) {
 	assert.Equal(t, []string{"a", "b"}, p.Tags)
 	assert.True(t, p.FailOnTimeout)
 	assert.Equal(t, []int{10, 20}, p.Backoff)
+	assert.Equal(t, 20, p.BackoffSeconds(2))
 }
 
 func TestNewPayloadWithRetryUntil(t *testing.T) {

@@ -117,6 +117,8 @@ queue.WorkerOptions{
     MaxTime:     3600,           // stop after N seconds (0 = unlimited)
     Sleep:       3*time.Second,  // poll interval when queue is empty
     StopOnEmpty: false,          // exit when queue drains
+    MaxTries:    0,              // attempts for jobs without maxTries, like --tries (0 = unlimited; Laravel defaults to 1)
+    Backoff:     0,              // retry delay for jobs without backoff, like --backoff
 }
 ```
 
@@ -153,7 +155,7 @@ Metadata:
 job.UUID()           // job UUID
 job.DisplayName()    // Laravel display name
 job.CommandName()    // FQCN
-job.Attempts()       // attempt count
+job.Attempts()       // attempt number of this run (1 on the first run, as in Laravel)
 job.Queue()          // queue name
 job.MaxTries()       // *int
 job.Timeout()        // *int (seconds)
@@ -167,7 +169,7 @@ Lifecycle:
 
 ```go
 job.Delete()               // ACK: remove from reserved set
-job.Release(5*time.Second) // NACK: return to queue with delay
+job.Release(5*time.Second) // NACK: return to queue with delay (the attempt is already counted)
 job.HasFailed()            // true if retry limits exceeded
 ```
 
