@@ -276,9 +276,7 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 		return
 	}
 
-	err = w.pipeline.Then(ctx, job, func() error {
-		return handler(ctx, job)
-	})
+	err = w.runHandler(ctx, job, handler)
 
 	duration := time.Since(start)
 
