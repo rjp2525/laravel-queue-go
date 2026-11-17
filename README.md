@@ -153,7 +153,7 @@ Metadata:
 job.UUID()           // job UUID
 job.DisplayName()    // Laravel display name
 job.CommandName()    // FQCN
-job.Attempts()       // attempt count
+job.Attempts()       // attempt number of this run (1 on the first run, as in Laravel)
 job.Queue()          // queue name
 job.MaxTries()       // *int
 job.Timeout()        // *int (seconds)
@@ -167,7 +167,7 @@ Lifecycle:
 
 ```go
 job.Delete()               // ACK: remove from reserved set
-job.Release(5*time.Second) // NACK: return to queue with delay
+job.Release(5*time.Second) // NACK: return to queue with delay (the attempt is already counted)
 job.HasFailed()            // true if retry limits exceeded
 ```
 
