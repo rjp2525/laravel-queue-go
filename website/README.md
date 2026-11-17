@@ -22,6 +22,11 @@ go run . build          # build only, into ./dist
 - **Styles:** `static/css/site.css`. The look follows reno.sh: Geist Mono, a
   framed window, navy rules, teal and orange accents.
 
+Each page also gets a 1200×630 social preview image (`og:image`), drawn at
+build time by `og.go` from the page's title and description. The Geist Mono
+files in `fonts/` are only used for those images and are licensed under the
+SIL Open Font License (`fonts/OFL.txt`).
+
 The build checks every internal link and heading anchor and fails if one is
 broken, so renaming a page or heading can't leave dead links behind.
 

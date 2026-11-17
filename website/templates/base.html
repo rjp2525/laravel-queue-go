@@ -7,10 +7,19 @@
 <link rel="canonical" href="{{.SiteURL}}{{.Page.URL}}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{.SiteName}}">
-<meta property="og:title" content="{{if .Home}}{{.SiteName}}{{else}}{{.Page.Title}}{{end}}">
+<meta property="og:title" content="{{if .Home}}{{.SiteName}}: work your Laravel queues from Go{{else}}{{.Page.Title}} · {{.SiteName}}{{end}}">
 <meta property="og:description" content="{{.Page.Description}}">
 <meta property="og:url" content="{{.SiteURL}}{{.Page.URL}}">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{{.SiteURL}}{{.Page.Image}}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{if .Home}}{{.SiteName}}: work your Laravel queues from Go{{else}}{{.Page.Title}}, from the {{.SiteName}} documentation{{end}}">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{if .Home}}{{.SiteName}}{{else}}{{.Page.Title}} · {{.SiteName}}{{end}}">
+<meta name="twitter:description" content="{{.Page.Description}}">
+<meta name="twitter:image" content="{{.SiteURL}}{{.Page.Image}}">
 <meta name="theme-color" content="#011627">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
