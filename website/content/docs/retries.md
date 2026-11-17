@@ -1,6 +1,6 @@
 ---
 title: Retries and timeouts
-description: What happens when a handler returns an error, and how $tries, $backoff, retryUntil and $timeout carry over.
+description: What happens when a handler returns an error and how $tries, $backoff, retryUntil and $timeout carry over.
 ---
 
 The short version: the properties you already put on Laravel jobs mean the same thing here.
@@ -19,7 +19,7 @@ When a handler returns an error (or panics), the worker decides between **retryi
 | `$backoff = [10, 60, 300]` | Wait 10s, then 60s, then 300s for every retry after that. |
 | no `$backoff` | Use the worker's `Backoff`. Its default is no delay. |
 
-A job that fails for good is removed from the queue, written to [failed job storage](/docs/failed-jobs/), and announced with a `JobFailed` event.
+A job that fails for good is removed from the queue, written to [failed job storage](/docs/failed-jobs/) and announced with a `JobFailed` event.
 
 `job.Attempts()` counts the current run, so it's `1` the first time, exactly like `$this->attempts()`.
 
@@ -67,13 +67,13 @@ mgr.Register(`App\Jobs\FetchReport`, func(ctx context.Context, job *queue.Job) e
 When a handler returns an error after its deadline, the failure is reported as a `*queue.TimeoutError`. With `$failOnTimeout = true` the job is failed on the spot instead of retried.
 
 > [!WARNING]
-> Timeouts are cooperative. Go can't kill a goroutine, so a handler that ignores `ctx` runs for as long as it likes. Pass `ctx` to database calls, HTTP requests and anything else that can block, and check `ctx.Err()` inside long loops.
+> Timeouts are cooperative. Go can't kill a goroutine, so a handler that ignores `ctx` runs for as long as it likes. Pass `ctx` to database calls, HTTP requests and anything else that can block and check `ctx.Err()` inside long loops.
 
 Keep `$timeout` shorter than the queue's `retry_after`. Otherwise Redis gives the job to another worker while the first one is still running it.
 
 ## When a worker dies mid-job
 
-Attempts are counted in Redis the moment a job is reserved, not when it finishes. So if the process is killed (OOM, `kill -9`, a node going away), the attempt still counts. After `retry_after` the job becomes available again, and once it has used up its attempts it is failed with `queue.ErrMaxAttemptsExceeded` rather than run again.
+Attempts are counted in Redis the moment a job is reserved, not when it finishes. So if the process is killed (OOM, `kill -9`, a node going away), the attempt still counts. After `retry_after` the job becomes available again. Once it has used up its attempts it is failed with `queue.ErrMaxAttemptsExceeded` rather than run again.
 
 This is what stops a job that reliably crashes its worker from doing so forever, which is the reason to set `$tries` or `MaxTries` at all.
 

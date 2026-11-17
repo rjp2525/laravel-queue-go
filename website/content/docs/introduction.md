@@ -1,11 +1,11 @@
 ---
 title: Introduction
-description: What this package is, when it earns its keep, and what it deliberately does not try to do.
+description: What this package is, when it earns its keep and what it deliberately does not try to do.
 ---
 
-`laravel-queue-go` lets a Go program take part in a Laravel Redis queue. It can **consume** jobs your Laravel app dispatches, and it can **dispatch** jobs for `php artisan queue:work` to run.
+`laravel-queue-go` lets a Go program take part in a Laravel Redis queue. It can **consume** jobs your Laravel app dispatches. It can also **dispatch** jobs for `php artisan queue:work` to run.
 
-Nothing changes on the Laravel side. You keep writing job classes and calling `dispatch()`. A Go worker reads the same Redis keys Laravel does, runs the same Lua scripts, and records failures in the same `failed_jobs` table.
+Nothing changes on the Laravel side. You keep writing job classes and calling `dispatch()`. A Go worker reads the same Redis keys Laravel does, runs the same Lua scripts and records failures in the same `failed_jobs` table.
 
 ## When it's worth it
 
@@ -13,10 +13,10 @@ Most jobs are fine in PHP. Reach for a Go worker when one of them isn't:
 
 - **CPU-heavy work.** Image and video processing, PDF rendering, large imports, anything where a PHP worker pins a core for seconds.
 - **High fan-out I/O.** Thousands of webhooks or API calls, where one Go process with a few hundred goroutines replaces a fleet of `queue:work` processes.
-- **Work that already lives in Go.** You have a Go library or service that does the thing, and wrapping it in an HTTP endpoint just so PHP can call it feels silly.
+- **Work that already lives in Go.** You have a Go library or service that does the thing. Wrapping it in an HTTP endpoint just so PHP can call it feels silly.
 - **Memory.** A Go worker with 50 concurrent jobs is one process. Fifty PHP workers are fifty copies of your framework in RAM.
 
-You don't have to move everything. Put the expensive job class on its own queue, point a Go worker at that queue, and leave the rest alone.
+You don't have to move everything. Put the expensive job class on its own queue, point a Go worker at that queue and leave the rest alone.
 
 ## How it fits together
 
@@ -29,7 +29,7 @@ ResizeImage::dispatch()  --->  queues:images          --->  handler(ctx, job)
 failed_jobs table        <-------------------------------    out of attempts
 ```
 
-The Go side implements Laravel's queue protocol rather than inventing a bridge. That has a practical consequence: Go workers and PHP workers can run on the **same queue at the same time**, and a job dispatched from Go is indistinguishable from one dispatched by Laravel.
+The Go side implements Laravel's queue protocol rather than inventing a bridge. That has a practical consequence: Go workers and PHP workers can run on the **same queue at the same time**. A job dispatched from Go is indistinguishable from one dispatched by Laravel.
 
 ## What you get
 

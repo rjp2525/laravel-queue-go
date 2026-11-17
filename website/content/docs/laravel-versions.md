@@ -5,7 +5,7 @@ description: Laravel 10, 11, 12 and 13 are supported. Here's what differs betwee
 
 The queue protocol itself, meaning the Redis keys and the Lua scripts that move jobs between them, is identical from Laravel 10 through 13. A Go worker consumes jobs from any of them without being told which.
 
-Three things do differ, and they matter mostly when you **dispatch** from Go or connect for the first time:
+Three things do differ. They matter mostly when you **dispatch** from Go or connect for the first time:
 
 | | 10 | 11 | 12 | 13 |
 |---|---|---|---|---|
@@ -24,7 +24,7 @@ driver := queue.NewRedisDriver(rdb, queue.RedisDriverConfig{
 })
 ```
 
-That picks the payload format dispatchers write, the default prefix when you don't set `Prefix`, and the cluster key layout.
+That picks the payload format dispatchers write, the default prefix when you don't set `Prefix` and the cluster key layout.
 
 Other places you can set it:
 
@@ -58,15 +58,15 @@ v := job.LaravelVersion()                              // inside a handler
 Detection reads keys in the payload, so it has honest limits:
 
 - **Laravel 10 and 11 look the same** unless the job carries a Context (`Context::add(...)`). An 11 payload without one is reported as 10. The two versions use the same payload format and prefix, so this changes nothing in practice.
-- **Custom payload keys can confuse it.** If your app adds keys with `Queue::createPayloadUsing`, or runs a very early 12.x or 13.x release, detection may land one version low. Pin the version and the question goes away.
+- **Custom payload keys can confuse it.** Detection may land one version low if your app adds keys with `Queue::createPayloadUsing` or runs a very early 12.x or 13.x release. Pin the version and the question goes away.
 - **The prefix can't be detected.** You need the prefix to find the queue in the first place. It follows the version you configure, not the one detected.
 
 > [!TIP]
-> Auto-detection is a convenience for getting started. In production, set `LaravelVersion` explicitly. It's one line, and it removes a moving part.
+> Auto-detection is a convenience for getting started. In production, set `LaravelVersion` explicitly. It's one line and it removes a moving part.
 
 ## The prefix, again
 
-It's the single most common setup problem, so once more: the default prefix lives in your app's `config/database.php`, and Laravel changed the default in version 12 from underscores to hyphens. An app created on 10 and upgraded to 13 still has `laravel_database_`.
+It's the single most common setup problem, so once more: the default prefix lives in your app's `config/database.php`. Laravel changed the default in version 12 from underscores to hyphens. An app created on 10 and upgraded to 13 still has `laravel_database_`.
 
 `LaravelVersion.RedisPrefix` gives you what a fresh app of that version would use:
 
@@ -79,9 +79,9 @@ When in doubt, set `Prefix` to the exact string from `config('database.redis.opt
 
 ## Redis Cluster
 
-On a cluster, all keys of a queue must hash to the same slot, or the Lua scripts fail with `CROSSSLOT`.
+On a cluster all keys of a queue must hash to the same slot. If they don't, the Lua scripts fail with `CROSSSLOT`.
 
-- **Laravel 13** handles this for you by storing `queues:{default}`. Set `LaravelVersion: queue.Laravel13` and pass a `*redis.ClusterClient`; the driver uses the same layout.
+- **Laravel 13** handles this for you by storing `queues:{default}`. Set `LaravelVersion: queue.Laravel13` and pass a `*redis.ClusterClient`. The driver then uses the same layout.
 - **Laravel 10 to 12** leave it to you: name the queue with a hash tag, `{default}`, in both Laravel and Go.
 
 If you're on 13 with a cluster but leave the version on auto, set `HashTagQueues: true` so the keys match from the first call.

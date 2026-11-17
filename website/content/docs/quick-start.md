@@ -3,7 +3,7 @@ title: Quick start
 description: A Laravel job handled by a Go worker, end to end, in about five minutes.
 ---
 
-We'll take one Laravel job, `SendWelcomeEmail`, and process it in Go.
+We'll take one Laravel job called `SendWelcomeEmail` and process it in Go.
 
 ## 1. The Laravel job
 
@@ -88,7 +88,7 @@ func main() {
 Three things to notice:
 
 - Handlers are registered by the job's **fully qualified class name**. Use a raw string (backticks) so you don't have to double the backslashes.
-- Returning `nil` acknowledges the job. Returning an error retries it, here after 10 seconds and then 60, and after the third failure it goes to `failed_jobs`.
+- Returning `nil` acknowledges the job. Returning an error retries it, here after 10 seconds and then 60. After the third failure it goes to `failed_jobs`.
 - `ctx` is cancelled on shutdown and when the job's `$timeout` runs out. Pass it to everything that does I/O.
 
 ## 3. Run it

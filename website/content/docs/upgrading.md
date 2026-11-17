@@ -1,9 +1,9 @@
 ---
 title: Upgrading
-description: Moving from v1 to v2. What you need to touch, and what you can leave alone.
+description: Moving from v1 to v2. What you need to touch and what you can leave alone.
 ---
 
-v2 is the result of a full audit against Laravel 10 through 13. It fixes bugs that duplicated or lost jobs, and a few of those fixes change behaviour you may have coded around.
+v2 is the result of a full audit against Laravel 10 through 13. It fixes bugs that duplicated or lost jobs. A few of those fixes change behaviour you may have coded around.
 
 Most apps need four small edits. Start there.
 
@@ -28,7 +28,7 @@ import "github.com/rjp2525/laravel-queue-go/v2/pkg/queue"
 A find-and-replace of `laravel-queue-go/pkg/` with `laravel-queue-go/v2/pkg/` across your project does it. Then run `go mod tidy` to drop the v1 requirement.
 
 > [!NOTE]
-> Use **v2.0.1 or newer**. The v2.0.0 tag was published without the `/v2` path and can't be installed; `go get` rejects it.
+> Use **v2.0.1 or newer**. The v2.0.0 tag was published without the `/v2` path and can't be installed. `go get` rejects it.
 
 ### 2. `job.Attempts()` starts at 1
 
@@ -91,13 +91,13 @@ Each links to a short guide in the repository with before-and-after code.
 | You use | What changed | Guide |
 |---|---|---|
 | A custom `queue.Driver` | `Pop` must count the attempt and fill `RawJob.Reserved` | [reserve and release](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/laravel-pop-release-semantics.md) |
-| `batch.Repository` | Uses Laravel's real schema; `Options` is PHP-serialized | [batches](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/batch-laravel-schema.md) |
+| `batch.Repository` | Uses Laravel's real schema. `Options` is PHP-serialized | [batches](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/batch-laravel-schema.md) |
 | `DispatchOptions.Chain` | Chained entries are serialized commands | [chains](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/chain-dispatch-format.md) |
-| `middleware.Timeout` | Deprecated; the worker enforces `$timeout` | [timeouts](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/worker-job-timeout.md) |
+| `middleware.Timeout` | Deprecated. The worker enforces `$timeout` | [timeouts](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/worker-job-timeout.md) |
 | `events.WorkerStopping` | Fires once, after in-flight jobs drain | [worker accounting](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/worker-concurrency-accounting.md) |
-| `config.FromEnv` | Reads Laravel's `.env` conventions; derives the prefix from `APP_NAME` | [config](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/config-laravel-env.md) |
-| The `lqworker` binary | Drains on `SIGTERM`; validates its environment | [lqworker](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/lqworker-flags-and-drain.md) |
-| Laravel 10 or 11 | Now supported; the default prefix follows the version | [versions](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/laravel-version.md) |
+| `config.FromEnv` | Reads Laravel's `.env` conventions. Derives the prefix from `APP_NAME` | [config](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/config-laravel-env.md) |
+| The `lqworker` binary | Drains on `SIGTERM`. Validates its environment | [lqworker](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/lqworker-flags-and-drain.md) |
+| Laravel 10 or 11 | Now supported. The default prefix follows the version | [versions](https://github.com/rjp2525/laravel-queue-go/blob/main/docs/upgrading/laravel-version.md) |
 
 Every guide is in [`docs/upgrading`](https://github.com/rjp2525/laravel-queue-go/tree/main/docs/upgrading).
 
@@ -105,7 +105,7 @@ Every guide is in [`docs/upgrading`](https://github.com/rjp2525/laravel-queue-go
 
 Queues that ran v1.3.0 or earlier may carry leftovers from the release bug:
 
-- **`{prefix}queues:{name}:reserved`** can hold stale copies of jobs that were released. Each is delivered once more after `retry_after`. If that's a problem, stop your workers, inspect the set with `ZRANGE`, and remove what shouldn't be there with `ZREM`.
+- **`{prefix}queues:{name}:reserved`** can hold stale copies of jobs that were released. Each is delivered once more after `retry_after`. If that's a problem, stop your workers, inspect the set with `ZRANGE` and remove what shouldn't be there with `ZREM`.
 - **`{prefix}queues:{name}:notify`** may be very long. It holds wake-up tokens and nothing else. `DEL` it whenever you like.
 
 ## While you're in there

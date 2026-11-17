@@ -30,7 +30,7 @@ Then:
 lqworker --queue=lqworker-test --prefix=laravel-database- --max-jobs=1
 ```
 
-You should see the job logged as JSON, with its class name, UUID and attempt number, and the process exits. If it sits there, the prefix is wrong or the job went to a different Redis database.
+You should see the job logged as JSON with its class name, UUID and attempt number. Then the process exits. If it sits there, the prefix is wrong or the job went to a different Redis database.
 
 ## Flags
 
@@ -52,14 +52,14 @@ You should see the job logged as JSON, with its class name, UUID and attempt num
 --version            print the version
 ```
 
-Time flags take seconds, like `queue:work` (`--sleep=3`), or a Go duration (`--sleep=500ms`).
+Time flags take seconds like `queue:work` does (`--sleep=3`) or a Go duration (`--sleep=500ms`).
 
-Every setting can also come from the [environment](/docs/configuration/#variables); flags win. The binary refuses to start if an environment value is invalid and tells you which one.
+Every setting can also come from the [environment](/docs/configuration/#variables). Flags win. The binary refuses to start if an environment value is invalid and tells you which one.
 
 ## Shutdown
 
-On the first `SIGTERM` or `SIGINT`, `lqworker` stops taking jobs and waits for the running ones. A second signal, or `--shutdown-timeout` running out, cancels them.
+On the first `SIGTERM` or `SIGINT`, `lqworker` stops taking jobs and waits for the running ones. A second signal cancels them. So does `--shutdown-timeout` running out.
 
 ## For real workloads
 
-Write your own `main`. It's about thirty lines (the [quick start](/docs/quick-start/) has all of them), and it's the only way to register handlers. `lqworker`'s source in `cmd/lqworker` is a reasonable starting point for flag handling and shutdown.
+Write your own `main`. It's about thirty lines and the [quick start](/docs/quick-start/) has all of them. It's also the only way to register handlers. `lqworker`'s source in `cmd/lqworker` is a reasonable starting point for flag handling and shutdown.

@@ -1,9 +1,9 @@
 ---
 title: Middleware
-description: Wrap every job with your own logic, or use the built-in rate limiting and locking.
+description: Wrap every job with your own logic or use the built-in rate limiting and locking.
 ---
 
-Middleware wraps a handler. It runs before the job, decides whether to continue, and sees the result afterwards. If you've written HTTP middleware in Go, this is the same shape.
+Middleware wraps a handler. It runs before the job, decides whether to continue and sees the result afterwards. If you've written HTTP middleware in Go, this is the same shape.
 
 ```go
 type Middleware func(ctx context.Context, job middleware.Job, next func() error) error
@@ -30,7 +30,7 @@ func Timing(logger *slog.Logger) middleware.Middleware {
 }
 ```
 
-Register it on the manager for every worker, or on a single worker:
+Register it on the manager for every worker or on a single worker:
 
 ```go
 mgr.Use(Timing(logger), Tracing())

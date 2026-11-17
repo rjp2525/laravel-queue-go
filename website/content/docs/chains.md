@@ -1,6 +1,6 @@
 ---
 title: Job chains
-description: Dispatch a sequence of jobs that run one after another, and what to know when Go handles part of a chain.
+description: Dispatch a sequence of jobs that run one after another and what to know when Go handles part of a chain.
 ---
 
 A chain is a list of jobs that run in order. Each one starts only after the previous one succeeded. If one fails, the rest never run.
@@ -28,11 +28,11 @@ Bus::chain([
 ])->dispatch();
 ```
 
-Laravel's workers run it like any other chain: when `ProcessPodcast` succeeds, the worker dispatches `OptimizePodcast`, and so on. The job classes need the `Queueable` trait, which every generated job has.
+Laravel's workers run it like any other chain: when `ProcessPodcast` succeeds, the worker dispatches `OptimizePodcast` and so on down the list. The job classes need the `Queueable` trait, which every generated job has.
 
 ## When a Go worker handles a chained job
 
-This is the part to know about. **Laravel's worker continues a chain; a Go worker does not.** If a Go handler processes a job that has more jobs chained after it, the handler has to dispatch the next one or the chain stops there.
+This is the part to know about. **Laravel's worker continues a chain. A Go worker does not.** If a Go handler processes a job that has more jobs chained after it, the handler has to dispatch the next one or the chain stops there.
 
 You can see what's waiting:
 
@@ -57,9 +57,9 @@ mgr.Register(`App\Jobs\ProcessPodcast`, func(ctx context.Context, job *queue.Job
 
 In practice the simplest designs avoid the problem:
 
-- **Put the Go step last.** PHP runs the earlier steps and continues the chain; the Go job at the end has nothing after it.
+- **Put the Go step last.** PHP runs the earlier steps and continues the chain. The Go job at the end has nothing after it.
 - **Have the Go handler dispatch what comes next explicitly**, with `d.Dispatch`, instead of relying on the chain.
 - **Keep the whole chain on one side.** A chain made only of PHP jobs, dispatched from Go, works without caveats.
 
 > [!NOTE]
-> Chain callbacks (`->catch(...)`) are PHP closures. They run when a Laravel worker handles the failing job, and can't run in Go.
+> Chain callbacks (`->catch(...)`) are PHP closures. They run when a Laravel worker handles the failing job. They can't run in Go.

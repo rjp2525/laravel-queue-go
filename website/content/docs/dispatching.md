@@ -1,6 +1,6 @@
 ---
 title: Dispatching jobs
-description: Push jobs from Go for Laravel's workers, or your own, to run.
+description: Push jobs from Go for Laravel's workers or your own to run.
 ---
 
 A dispatcher puts jobs on a queue. To Laravel they look exactly like jobs it dispatched itself, so `php artisan queue:work` runs them without knowing where they came from.
@@ -65,9 +65,9 @@ d.Dispatch(ctx, `App\Jobs\ImportFeed`, args,
 )
 ```
 
-Set these here even if the PHP class already declares `$tries` or `$backoff`. Laravel copies those properties into the payload when *it* dispatches a job, and its worker only reads the payload. A job dispatched from Go never passes through that step, so the class's own values are not picked up.
+Set these here even if the PHP class already declares `$tries` or `$backoff`. Laravel copies those properties into the payload when *it* dispatches a job. Its worker only reads the payload. A job dispatched from Go never passes through that step, so the class's own values are not picked up.
 
-To choose the queue, or when you have many settings, use `DispatchWithOptions`:
+Use `DispatchWithOptions` to choose the queue or when you have many settings:
 
 ```go
 tries := 3
@@ -91,7 +91,7 @@ d := queue.NewDispatcher(driver, queue.WithDefaultQueue("imports"))
 
 ## Which Laravel version to write for
 
-Payloads differ slightly between Laravel versions. By default the dispatcher looks at a job already on the queue and writes the same format; with nothing to look at, it writes the newest format, which older versions accept. To pin it:
+Payloads differ slightly between Laravel versions. By default the dispatcher looks at a job already on the queue and writes the same format. With nothing to look at it writes the newest format, which older versions accept. To pin it:
 
 ```go
 d := queue.NewDispatcher(driver, queue.ForLaravel(queue.Laravel11))
@@ -113,4 +113,4 @@ Go workers read both formats without being told. Laravel can't run JSON commands
 
 - **No `ShouldBeUnique`.** Laravel takes that lock in PHP at dispatch time. A job dispatched from Go skips it.
 - **No `afterCommit`.** The job is pushed immediately. If it depends on a database transaction, dispatch after you commit.
-- **No transactions across Redis and your database.** If the push fails you get an error back; decide whether to retry.
+- **No transactions across Redis and your database.** If the push fails you get an error back. Decide whether to retry.

@@ -3,7 +3,7 @@ title: PHP serialization
 description: The phpserialize package, for when the typed accessors aren't enough.
 ---
 
-Laravel stores a job as the output of PHP's `serialize()`. The `phpserialize` package reads and writes that format. The [job accessors](/docs/handlers/) are built on it, and you can use it directly when you need the raw structure.
+Laravel stores a job as the output of PHP's `serialize()`. The `phpserialize` package reads and writes that format. The [job accessors](/docs/handlers/) are built on it. You can also use it directly when you need the raw structure.
 
 ```go
 import "github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
@@ -30,15 +30,15 @@ PHP values map to Go like this:
 
 ### Arrays
 
-A PHP array is an ordered map, and `Array` keeps it that way: parallel `Keys` and `Values` slices in PHP's order. Convert when you know the shape:
+A PHP array is an ordered map. `Array` keeps it that way with parallel `Keys` and `Values` slices in PHP's order. Convert when you know the shape:
 
 ```go
 arr := value.(*phpserialize.Array)
 
 arr.Len()
 arr.IsSequential() // keys are 0, 1, 2, ...
-arr.ToSlice()      // []any, or nil if the array isn't a list
-arr.ToMap()        // map[string]any; integer keys become "0", "1", ...
+arr.ToSlice()      // []any (nil if the array isn't a list)
+arr.ToMap()        // map[string]any (integer keys become "0", "1", ...)
 ```
 
 ### Objects
@@ -96,7 +96,7 @@ To send an enum to PHP:
 
 ## Safety
 
-Payloads come out of Redis, and Redis is not always written to by code you trust. The decoder is built for that:
+Payloads come out of Redis. Redis is not always written to by code you trust. The decoder is built for that:
 
 - Malformed input returns an error. It never panics.
 - Lengths and counts are checked against the input, so a forged `a:999999999:{` can't make it allocate.
