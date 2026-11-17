@@ -309,6 +309,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		Error:   jobErr,
 	})
 
+	if failsOnTimeout(job, jobErr) {
+		w.fail(ctx, job, jobErr, duration)
+		return
+	}
+
 	var releaseErr *middleware.ReleaseError
 	if errors.As(jobErr, &releaseErr) {
 		if err := job.Release(releaseErr.Delay); err != nil {
@@ -332,6 +337,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		return
 	}
 
+	w.fail(ctx, job, jobErr, duration)
+}
+
+// fail removes the job from the queue for good and records it as failed.
+func (w *Worker) fail(ctx context.Context, job *Job, jobErr error, duration time.Duration) {
 	if err := job.Delete(); err != nil {
 		w.logger.Error("failed to delete failed job", "job", job.DisplayName(), "error", err)
 	}
