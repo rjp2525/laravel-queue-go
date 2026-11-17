@@ -28,9 +28,12 @@ type Job struct {
 	ctx     context.Context
 }
 
+// ParseJob decodes a popped job. It reads the reserved payload, so Attempts
+// already includes the current run (1 on the first run), like Laravel's
+// Job::attempts().
 func ParseJob(ctx context.Context, raw *RawJob, driver Driver) (*Job, error) {
 	var payload LaravelPayload
-	if err := json.Unmarshal([]byte(raw.Body), &payload); err != nil {
+	if err := json.Unmarshal([]byte(raw.reserved()), &payload); err != nil {
 		return nil, fmt.Errorf("parse job payload: %w", err)
 	}
 
@@ -215,13 +218,10 @@ func (j *Job) Delete() error {
 	return j.driver.Delete(j.ctx, j.raw)
 }
 
+// Release puts the job back on the queue after delay. The reserved payload is
+// moved as-is: its attempt count was already incremented when it was popped,
+// and fields this package does not model are preserved.
 func (j *Job) Release(delay time.Duration) error {
-	j.payload.Attempts++
-	body, err := json.Marshal(j.payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload for release: %w", err)
-	}
-	j.raw.Body = string(body)
 	return j.driver.Release(j.ctx, j.raw, delay)
 }
 

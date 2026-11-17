@@ -45,6 +45,26 @@ type PayloadData struct {
 	Command     string `json:"command"`
 }
 
+// UnmarshalJSON tolerates the way Redis' cjson re-encodes payloads when a job
+// is reserved: an empty JSON array comes back as an empty object, so a job
+// pushed with "tags":[] (as Horizon does) is reserved as "tags":{}.
+func (p *LaravelPayload) UnmarshalJSON(data []byte) error {
+	type plain LaravelPayload
+	aux := struct {
+		*plain
+		Tags json.RawMessage `json:"tags"`
+	}{plain: (*plain)(p)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	p.Tags = nil
+	if len(aux.Tags) == 0 || aux.Tags[0] != '[' {
+		return nil // absent, null, or an empty array mangled into {}
+	}
+	return json.Unmarshal(aux.Tags, &p.Tags)
+}
+
 func NewPayload(jobName string, command string, opts ...PayloadOption) *LaravelPayload {
 	p := &LaravelPayload{
 		UUID:        uuid.NewString(),
