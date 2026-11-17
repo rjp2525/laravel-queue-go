@@ -358,8 +358,10 @@ The worker does not update batches by itself, and a batch's `then` / `catch` / `
 Chained jobs:
 
 ```go
-chain := job.ChainedJobs() // []string of serialized payloads
+chain := job.ChainedJobs() // []string of serialized commands (PHP serialize() output)
 ```
+
+Chains dispatched from Go (`DispatchOptions.Chain`) are continued by Laravel's worker after each job succeeds. A Go worker does not dispatch the next job of a chain by itself: if a Go handler takes over a job that has `ChainedJobs()`, it has to dispatch the next one or the chain ends there.
 
 ### PHP serialization
 

@@ -283,6 +283,13 @@ func (j *Job) BackoffDuration() time.Duration {
 	return time.Duration(secs) * time.Second
 }
 
+// ChainedJobs returns the jobs that follow this one in a chain, each as a
+// serialized command: PHP serialize() output for Laravel jobs (decode it with
+// phpserialize.Decode), a JSON object for jobs dispatched with FormatJSON.
+//
+// The worker does not dispatch them. Laravel's worker continues a chain
+// itself after a job succeeds; a Go handler that takes over a chained job has
+// to dispatch the next one, or the chain ends there.
 func (j *Job) ChainedJobs() []string {
 	if j.data == nil {
 		return nil
