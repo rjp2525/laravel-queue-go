@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -202,9 +203,7 @@ func (d *Dispatcher) marshalCommand(jobName string, args map[string]any) (string
 func marshalCommandJSON(jobName string, args map[string]any) (string, error) {
 	payload := make(map[string]any, len(args)+1)
 	payload["commandName"] = jobName
-	for k, v := range args {
-		payload[k] = v
-	}
+	maps.Copy(payload, args)
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("json marshal command: %w", err)
