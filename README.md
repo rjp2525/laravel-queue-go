@@ -387,11 +387,13 @@ Enum values are decoded into `*phpserialize.Enum` with `ClassName` and `CaseName
 
 ### Configuration
 
-All settings can be loaded from environment variables:
+All settings can be loaded from environment variables. The loader also understands the variables a Laravel `.env` already defines (`REDIS_HOST` + `REDIS_PORT`, `REDIS_PASSWORD=null`, `REDIS_QUEUE`, `REDIS_QUEUE_RETRY_AFTER`), so a Go worker can share that file. Durations accept Go syntax (`90s`) or a bare number of seconds (`90`).
 
 | Variable | Default | Description |
 |---|---|---|
-| `REDIS_HOST` | `127.0.0.1:6379` | Redis address |
+| `REDIS_HOST` | `127.0.0.1` | Redis host, or `host:port` |
+| `REDIS_PORT` | `6379` | Redis port, used when `REDIS_HOST` has none |
+| `REDIS_USERNAME` | (empty) | Redis ACL username |
 | `REDIS_PASSWORD` | (empty) | Redis password |
 | `REDIS_DB` | `0` | Redis database number |
 | `REDIS_PREFIX` | `laravel-database-` | Redis key prefix |
@@ -410,7 +412,8 @@ All settings can be loaded from environment variables:
 ```go
 import "github.com/rjp2525/laravel-queue-go/pkg/config"
 
-cfg := config.FromEnv()
+cfg := config.FromEnv()        // invalid values silently keep their defaults
+cfg, err := config.Load()      // same, but err names every invalid variable
 ```
 
 The default Redis prefix (`laravel-database-`) matches what Laravel generates from `Str::slug(env('APP_NAME', 'laravel')).'-database-'`. If your Laravel app has a custom `APP_NAME`, set `REDIS_PREFIX` to match.
