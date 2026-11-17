@@ -28,9 +28,12 @@ type Job struct {
 	ctx     context.Context
 }
 
+// ParseJob decodes a popped job. It reads the reserved payload, so Attempts
+// already includes the current run (1 on the first run), like Laravel's
+// Job::attempts().
 func ParseJob(ctx context.Context, raw *RawJob, driver Driver) (*Job, error) {
 	var payload LaravelPayload
-	if err := json.Unmarshal([]byte(raw.Body), &payload); err != nil {
+	if err := json.Unmarshal([]byte(raw.reserved()), &payload); err != nil {
 		return nil, fmt.Errorf("parse job payload: %w", err)
 	}
 
@@ -83,6 +86,14 @@ func decodeCommandJSON(command string) (*phpserialize.Object, CommandFormat) {
 }
 
 func (j *Job) Format() CommandFormat { return j.format }
+
+// LaravelVersion is the Laravel major version that produced the job, inferred
+// from its payload keys. See DetectLaravelVersion for the caveats; jobs
+// dispatched by this package report the version they were written for.
+func (j *Job) LaravelVersion() LaravelVersion {
+	v, _ := DetectLaravelVersion([]byte(j.raw.Body))
+	return v
+}
 
 // Property accessors — work identically regardless of command format.
 
@@ -218,31 +229,75 @@ func (j *Job) Delete() error {
 	return j.driver.Delete(j.ctx, j.raw)
 }
 
+// Release puts the job back on the queue after delay. The reserved payload is
+// moved as-is: its attempt count was already incremented when it was popped,
+// and fields this package does not model are preserved.
 func (j *Job) Release(delay time.Duration) error {
-	j.payload.Attempts++
-	body, err := json.Marshal(j.payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload for release: %w", err)
-	}
-	j.raw.Body = string(body)
 	return j.driver.Release(j.ctx, j.raw, delay)
 }
 
+// HasFailed reports whether the job has used up its retries, assuming the
+// current run failed. It follows Laravel's rules: a retryUntil deadline, when
+// set, is the only limit; otherwise maxTries applies, where 0 or an absent
+// value means unlimited.
 func (j *Job) HasFailed() bool {
-	if j.payload.MaxTries != nil && j.payload.Attempts >= *j.payload.MaxTries {
-		return true
-	}
-	if j.payload.RetryUntil != nil && time.Now().Unix() >= *j.payload.RetryUntil {
-		return true
-	}
-	return false
+	return j.willExceedMaxAttempts(0)
 }
 
+// retryUntil returns the job's retry deadline, or 0 when it has none. Like
+// Laravel, a zero timestamp counts as "not set".
+func (j *Job) retryUntil() int64 {
+	if j.payload.RetryUntil == nil {
+		return 0
+	}
+	return *j.payload.RetryUntil
+}
+
+// maxTries returns the payload's maxTries, or workerDefault when the payload
+// does not set one.
+func (j *Job) maxTries(workerDefault int) int {
+	if j.payload.MaxTries != nil {
+		return *j.payload.MaxTries
+	}
+	return workerDefault
+}
+
+// willExceedMaxAttempts mirrors Worker::markJobAsFailedIfWillExceedMaxAttempts:
+// should a job whose current run just failed be failed for good?
+func (j *Job) willExceedMaxAttempts(workerDefault int) bool {
+	if until := j.retryUntil(); until != 0 {
+		return until <= time.Now().Unix()
+	}
+	maxTries := j.maxTries(workerDefault)
+	return maxTries > 0 && j.payload.Attempts >= maxTries
+}
+
+// alreadyExceedsMaxAttempts mirrors
+// Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts: has a job that was just
+// reserved already been attempted too often? That happens when earlier runs
+// never reported back, e.g. the worker was killed mid-job.
+func (j *Job) alreadyExceedsMaxAttempts(workerDefault int) bool {
+	if until := j.retryUntil(); until != 0 {
+		return time.Now().Unix() > until
+	}
+	maxTries := j.maxTries(workerDefault)
+	return maxTries != 0 && j.payload.Attempts > maxTries
+}
+
+// BackoffDuration is the delay before the next retry, taken from the
+// payload's backoff schedule. It is zero when the payload has none.
 func (j *Job) BackoffDuration() time.Duration {
 	secs := j.payload.BackoffSeconds(j.payload.Attempts)
 	return time.Duration(secs) * time.Second
 }
 
+// ChainedJobs returns the jobs that follow this one in a chain, each as a
+// serialized command: PHP serialize() output for Laravel jobs (decode it with
+// phpserialize.Decode), a JSON object for jobs dispatched with FormatJSON.
+//
+// The worker does not dispatch them. Laravel's worker continues a chain
+// itself after a job succeeds; a Go handler that takes over a chained job has
+// to dispatch the next one, or the chain ends there.
 func (j *Job) ChainedJobs() []string {
 	if j.data == nil {
 		return nil

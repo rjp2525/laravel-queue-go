@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rjp2525/laravel-queue-go/pkg/queue"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -101,4 +102,38 @@ func TestFromEnvPartialOverride(t *testing.T) {
 	// Everything else should be default.
 	assert.Equal(t, "127.0.0.1:6379", c.RedisAddr)
 	assert.Equal(t, 1, c.Concurrency)
+}
+
+// ---------------------------------------------------------------------------
+// Laravel version and derived prefix
+// ---------------------------------------------------------------------------
+
+func TestFromEnvLaravelVersionSelectsDefaultPrefix(t *testing.T) {
+	t.Setenv("LARAVEL_VERSION", "11")
+	t.Setenv("APP_NAME", "My Shop")
+
+	c := FromEnv()
+	assert.Equal(t, queue.Laravel11, c.LaravelVersion)
+	assert.Equal(t, "my_shop_database_", c.RedisPrefix)
+}
+
+func TestFromEnvPrefixFromAppName(t *testing.T) {
+	t.Setenv("APP_NAME", "My Shop")
+
+	c := FromEnv()
+	assert.Equal(t, queue.LaravelAuto, c.LaravelVersion)
+	assert.Equal(t, "my-shop-database-", c.RedisPrefix, "auto assumes the Laravel 12/13 form")
+}
+
+func TestFromEnvExplicitPrefixWins(t *testing.T) {
+	t.Setenv("LARAVEL_VERSION", "10")
+	t.Setenv("APP_NAME", "My Shop")
+	t.Setenv("REDIS_PREFIX", "custom:")
+
+	assert.Equal(t, "custom:", FromEnv().RedisPrefix)
+}
+
+func TestFromEnvInvalidLaravelVersionIsIgnored(t *testing.T) {
+	t.Setenv("LARAVEL_VERSION", "nine")
+	assert.Equal(t, queue.LaravelAuto, FromEnv().LaravelVersion)
 }

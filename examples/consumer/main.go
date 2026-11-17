@@ -13,7 +13,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/rjp2525/laravel-queue-go/pkg/events"
-	"github.com/rjp2525/laravel-queue-go/pkg/middleware"
 	"github.com/rjp2525/laravel-queue-go/pkg/queue"
 )
 
@@ -59,14 +58,8 @@ func main() {
 		return nil
 	})
 
-	// Timeout middleware now receives middleware.Job directly — no type assertion needed.
-	mgr.Use(middleware.Timeout(func(job middleware.Job) *time.Duration {
-		if t := job.Timeout(); t != nil {
-			d := time.Duration(*t) * time.Second
-			return &d
-		}
-		return nil
-	}))
+	// Job timeouts need no middleware: the worker cancels the handler's ctx
+	// when the payload's "timeout" (or WorkerOptions.Timeout) expires.
 
 	mgr.On(events.JobProcessed, func(e events.Event) {
 		logger.Info("job completed", "job", e.JobName, "duration", e.Duration)

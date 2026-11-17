@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -14,6 +15,11 @@ import (
 )
 
 type Handler func(ctx context.Context, job *Job) error
+
+// ErrMaxAttemptsExceeded is the failure recorded for a job that is reserved
+// again after it has already used all of its attempts, which means earlier
+// runs never finished (for example the worker was killed mid-job).
+var ErrMaxAttemptsExceeded = errors.New("job has been attempted too many times")
 
 type Worker struct {
 	driver         Driver
@@ -55,9 +61,9 @@ func newWorker(
 		opts.Sleep = 3 * time.Second
 	}
 
-	h := make(map[string]Handler, len(handlers))
-	for k, v := range handlers {
-		h[k] = v
+	h := maps.Clone(handlers)
+	if h == nil {
+		h = make(map[string]Handler)
 	}
 
 	return &Worker{
@@ -111,6 +117,11 @@ func (w *Worker) Run(ctx context.Context) error {
 		cancel()
 	}
 
+	// Fired once, whatever ends the loop: cancellation, Stop, MaxJobs,
+	// MaxTime or an empty queue with StopOnEmpty. In-flight jobs have
+	// finished by then.
+	defer w.events.Fire(events.Event{Type: events.WorkerStopping})
+
 	if w.options.Concurrency <= 1 {
 		return w.runSingle(ctx, fetchCtx)
 	}
@@ -140,12 +151,11 @@ const (
 	fetchError
 )
 
+// fetchJob reserves the next job. jobsProcessed is the number of jobs already
+// handed out, which is what MaxJobs limits.
 func (w *Worker) fetchJob(fetchCtx context.Context, jobsProcessed int, startTime time.Time) (*RawJob, fetchResult) {
-	select {
-	case <-fetchCtx.Done():
-		w.events.Fire(events.Event{Type: events.WorkerStopping})
+	if fetchCtx.Err() != nil {
 		return nil, fetchStop
-	default:
 	}
 
 	if w.options.MaxJobs > 0 && jobsProcessed >= w.options.MaxJobs {
@@ -216,38 +226,42 @@ func (w *Worker) runSingle(ctx, fetchCtx context.Context) error {
 
 func (w *Worker) runConcurrent(ctx, fetchCtx context.Context) error {
 	var (
-		wg            sync.WaitGroup
-		jobsProcessed int
-		mu            sync.Mutex
-		startTime     = time.Now()
+		wg          sync.WaitGroup
+		jobsStarted int
+		startTime   = time.Now()
 	)
 
 	sem := make(chan struct{}, w.options.Concurrency)
 
 	for {
-		mu.Lock()
-		count := jobsProcessed
-		mu.Unlock()
-
-		raw, result := w.fetchJob(fetchCtx, count, startTime)
-		switch result {
-		case fetchStop:
+		// Take a slot before reserving a job. A job popped while every slot
+		// is busy would sit in the reserved set with its retry_after clock
+		// running, and could be handed to another worker before this one
+		// even starts it.
+		select {
+		case sem <- struct{}{}:
+		case <-fetchCtx.Done():
 			wg.Wait()
 			return ctx.Err()
-		case fetchEmpty, fetchError:
+		}
+
+		raw, result := w.fetchJob(fetchCtx, jobsStarted, startTime)
+		if result != fetchGotJob {
+			<-sem
+			if result == fetchStop {
+				wg.Wait()
+				return ctx.Err()
+			}
 			continue
 		}
 
-		sem <- struct{}{}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		// Counted when started, not when finished, so that MaxJobs is not
+		// overshot by the jobs still in flight.
+		jobsStarted++
+		wg.Go(func() {
 			defer func() { <-sem }()
 			w.process(ctx, raw)
-			mu.Lock()
-			jobsProcessed++
-			mu.Unlock()
-		}()
+		})
 	}
 }
 
@@ -257,6 +271,12 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 	job, err := ParseJob(ctx, raw, w.driver)
 	if err != nil {
 		w.failUnparseable(context.WithoutCancel(ctx), raw, err)
+		return
+	}
+
+	if job.alreadyExceedsMaxAttempts(w.options.MaxTries) {
+		// Uncancellable: the failure must be recorded even during shutdown.
+		w.fail(context.WithoutCancel(ctx), job, fmt.Errorf("%s: %w", job.DisplayName(), ErrMaxAttemptsExceeded), 0)
 		return
 	}
 
@@ -274,9 +294,7 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 		return
 	}
 
-	err = w.pipeline.Then(ctx, job, func() error {
-		return handler(ctx, job)
-	})
+	err = w.runHandler(ctx, job, handler)
 
 	duration := time.Since(start)
 
@@ -311,6 +329,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		Error:   jobErr,
 	})
 
+	if failsOnTimeout(job, jobErr) {
+		w.fail(ctx, job, jobErr, duration)
+		return
+	}
+
 	var releaseErr *middleware.ReleaseError
 	if errors.As(jobErr, &releaseErr) {
 		if err := job.Release(releaseErr.Delay); err != nil {
@@ -319,8 +342,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		return
 	}
 
-	if !job.HasFailed() {
-		delay := job.BackoffDuration()
+	if !job.willExceedMaxAttempts(w.options.MaxTries) {
+		delay := w.options.Backoff
+		if job.payload.HasBackoff() {
+			delay = job.BackoffDuration()
+		}
 		if err := job.Release(delay); err != nil {
 			w.logger.Error("failed to release job", "job", job.DisplayName(), "error", err)
 		}

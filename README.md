@@ -115,8 +115,11 @@ queue.WorkerOptions{
     Concurrency: 4,              // parallel goroutines (1 = serial)
     MaxJobs:     1000,           // stop after N jobs (0 = unlimited)
     MaxTime:     3600,           // stop after N seconds (0 = unlimited)
+    Timeout:     0,              // timeout for jobs without one, like --timeout (0 = none; Laravel defaults to 60s)
     Sleep:       3*time.Second,  // poll interval when queue is empty
     StopOnEmpty: false,          // exit when queue drains
+    MaxTries:    0,              // attempts for jobs without maxTries, like --tries (0 = unlimited; Laravel defaults to 1)
+    Backoff:     0,              // retry delay for jobs without backoff, like --backoff
 }
 ```
 
@@ -153,7 +156,7 @@ Metadata:
 job.UUID()           // job UUID
 job.DisplayName()    // Laravel display name
 job.CommandName()    // FQCN
-job.Attempts()       // attempt count
+job.Attempts()       // attempt number of this run (1 on the first run, as in Laravel)
 job.Queue()          // queue name
 job.MaxTries()       // *int
 job.Timeout()        // *int (seconds)
@@ -167,7 +170,7 @@ Lifecycle:
 
 ```go
 job.Delete()               // ACK: remove from reserved set
-job.Release(5*time.Second) // NACK: return to queue with delay
+job.Release(5*time.Second) // NACK: return to queue with delay (the attempt is already counted)
 job.HasFailed()            // true if retry limits exceeded
 ```
 
@@ -233,17 +236,16 @@ The middleware pipeline wraps job execution. Each middleware calls `next()` to p
 import "github.com/rjp2525/laravel-queue-go/pkg/middleware"
 ```
 
-`Timeout` enforces a per-job timeout:
+Job timeouts need no middleware. The worker cancels the handler's `ctx` when the payload's `timeout` (or `WorkerOptions.Timeout`) expires, and fails the job instead of retrying it when the payload has `failOnTimeout`. Handlers must watch `ctx` for the timeout to take effect:
 
 ```go
-middleware.Timeout(func(job middleware.Job) *time.Duration {
-    if t := job.Timeout(); t != nil {
-        d := time.Duration(*t) * time.Second
-        return &d
-    }
-    return nil
+mgr.Register(`App\Jobs\Export`, func(ctx context.Context, job *queue.Job) error {
+    req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil) // aborted at the timeout
+    // ...
 })
 ```
+
+`middleware.Timeout` is deprecated: it cannot cancel the handler, only stop waiting for it.
 
 `RateLimited` throttles processing to N jobs per decay window:
 
@@ -278,7 +280,7 @@ middleware.ThrottlesExceptions(redisClient, func(job middleware.Job) string {
 Apply middleware globally:
 
 ```go
-mgr.Use(middleware.Timeout(timeoutGetter), middleware.RateLimited(rdb, "api", 60, time.Minute))
+mgr.Use(middleware.RateLimited(rdb, "api", 60, time.Minute))
 ```
 
 ### Events
@@ -337,11 +339,29 @@ if batchID := job.BatchID(); batchID != "" {
 }
 ```
 
+`batch.Repository` reads and updates Laravel's `job_batches` table (same layout in Laravel 10-13; MySQL, PostgreSQL, SQLite and SQL Server are detected from the driver):
+
+```go
+repo, err := batch.NewRepository(db, "job_batches")
+
+b, err := repo.Find(ctx, job.BatchID())
+if b.Cancelled() {
+    return nil // skip, as Laravel does for jobs of a cancelled batch
+}
+b.AllowsFailures()                                // Laravel's allowFailures option
+repo.DecrementPendingJobs(ctx, b.ID)              // a job of the batch succeeded
+repo.IncrementFailedJobs(ctx, b.ID, job.UUID())   // a job of the batch failed for good
+```
+
+The worker does not update batches by itself, and a batch's `then` / `catch` / `finally` callbacks are serialized PHP closures that only a Laravel worker can run. If a Go worker handles jobs of a Laravel batch, it has to update the counters as above, and callbacks fire only when the job that completes the batch is processed by Laravel.
+
 Chained jobs:
 
 ```go
-chain := job.ChainedJobs() // []string of serialized payloads
+chain := job.ChainedJobs() // []string of serialized commands (PHP serialize() output)
 ```
+
+Chains dispatched from Go (`DispatchOptions.Chain`) are continued by Laravel's worker after each job succeeds. A Go worker does not dispatch the next job of a chain by itself: if a Go handler takes over a job that has `ChainedJobs()`, it has to dispatch the next one or the chain ends there.
 
 ### PHP serialization
 
@@ -369,14 +389,16 @@ Enum values are decoded into `*phpserialize.Enum` with `ClassName` and `CaseName
 
 ### Configuration
 
-All settings can be loaded from environment variables:
+All settings can be loaded from environment variables. The loader also understands the variables a Laravel `.env` already defines (`REDIS_HOST` + `REDIS_PORT`, `REDIS_PASSWORD=null`, `REDIS_QUEUE`, `REDIS_QUEUE_RETRY_AFTER`), so a Go worker can share that file. Durations accept Go syntax (`90s`) or a bare number of seconds (`90`).
 
 | Variable | Default | Description |
 |---|---|---|
-| `REDIS_HOST` | `127.0.0.1:6379` | Redis address |
+| `REDIS_HOST` | `127.0.0.1` | Redis host, or `host:port` |
+| `REDIS_PORT` | `6379` | Redis port, used when `REDIS_HOST` has none |
+| `REDIS_USERNAME` | (empty) | Redis ACL username |
 | `REDIS_PASSWORD` | (empty) | Redis password |
 | `REDIS_DB` | `0` | Redis database number |
-| `REDIS_PREFIX` | `laravel-database-` | Redis key prefix |
+| `REDIS_PREFIX` | derived, see below | Redis key prefix |
 | `QUEUE_NAME` | `default` | Default queue name |
 | `QUEUE_RETRY_AFTER` | `90s` | Reserved job visibility timeout |
 | `QUEUE_BLOCK_FOR` | `5s` | BLPOP notification timeout |
@@ -388,14 +410,17 @@ All settings can be loaded from environment variables:
 | `QUEUE_FAILED_TABLE` | `failed_jobs` | Failed jobs table name |
 | `QUEUE_FAILED_DRIVER` | `database` | Failed job storage driver |
 | `DATABASE_URL` | (empty) | Database DSN for failed jobs |
+| `LARAVEL_VERSION` | `auto` | Laravel major version sharing the queue (`10`-`13`, or `auto`) |
+| `APP_NAME` | (empty) | Laravel `APP_NAME`; used to derive the Redis prefix when `REDIS_PREFIX` is unset |
 
 ```go
 import "github.com/rjp2525/laravel-queue-go/pkg/config"
 
-cfg := config.FromEnv()
+cfg := config.FromEnv()        // invalid values silently keep their defaults
+cfg, err := config.Load()      // same, but err names every invalid variable
 ```
 
-The default Redis prefix (`laravel-database-`) matches what Laravel generates from `Str::slug(env('APP_NAME', 'laravel')).'-database-'`. If your Laravel app has a custom `APP_NAME`, set `REDIS_PREFIX` to match.
+When `REDIS_PREFIX` is not set, the prefix is derived the way Laravel's `config/database.php` does it: `{slug(APP_NAME)}_database_` for Laravel 10 and 11, `{slug(APP_NAME)}-database-` for 12 and 13 (and for `auto`). The prefix is part of the app's own config file, so an app created on Laravel 10 and upgraded since still uses the underscore form. If jobs do not show up, check the real value with `php artisan tinker --execute="echo config('database.redis.options.prefix');"` or `queue.DiscoverQueues`.
 
 ### CLI binary (`lqworker`)
 
@@ -409,20 +434,64 @@ lqworker \
   --concurrency=4 \
   --redis=127.0.0.1:6379 \
   --prefix=laravel-database- \
+  --laravel-version=12 \
   --max-jobs=1000 \
   --max-time=3600
 ```
 
-All flags can also be set via environment variables. The binary registers a default handler that logs received jobs. For custom handlers, import the library and build your own binary.
+All flags can also be set via environment variables. Time flags (`--sleep`, `--retry-after`, `--block-for`, `--shutdown-timeout`) take seconds like `queue:work` (`--sleep=3`) or a Go duration (`--sleep=500ms`).
+
+On the first `SIGTERM` / `SIGINT` the worker stops taking jobs and lets the running ones finish. A second signal, or `--shutdown-timeout` running out, cancels them.
+
+> **Warning:** `lqworker` has no job handlers. Its default handler logs each job and acknowledges it, which removes the job from the queue. Use it to check connectivity or to drain a test queue, not on a queue whose jobs you need. For real work, import the library and register handlers in your own binary.
 
 ## Laravel compatibility
 
 | Laravel Version | Status |
 |---|---|
+| 10.x | Supported |
+| 11.x | Supported |
 | 12.x | Supported |
 | 13.x | Supported |
 
-The Go driver matches Laravel's Redis key layout (`{prefix}queues:{name}`, `:delayed`, `:reserved`, `:notify`), Lua scripts, and JSON payload envelope format. Go workers and Laravel workers can run side-by-side on the same queues.
+The Redis key layout (`{prefix}queues:{name}`, `:delayed`, `:reserved`, `:notify`) and the `pop`, `release` and `migrate` Lua scripts are identical in all four versions, so Go and Laravel workers can share a queue on any of them. What differs is the job payload, the default key prefix and the cluster key layout:
+
+| | 10 | 11 | 12 | 13 |
+|---|---|---|---|---|
+| Default prefix for `APP_NAME=Laravel` | `laravel_database_` | `laravel_database_` | `laravel-database-` | `laravel-database-` |
+| `illuminate:log:context` in payload | | when Context is used | when Context is used | when Context is used |
+| `createdAt`, `delay`, `data.batchId` in payload | | | yes | yes |
+| `countCrashesAsExceptions`, `deleteWhenMissingModels` in payload | | | | yes |
+| Keys on Redis Cluster | `queues:name` | `queues:name` | `queues:name` | `queues:{name}` |
+
+### Selecting the version
+
+Set it on the driver. Dispatchers created from the driver write that version's payload, and the default prefix and cluster key layout follow it:
+
+```go
+driver := queue.NewRedisDriver(rdb, queue.RedisDriverConfig{
+    LaravelVersion: queue.Laravel11, // Laravel10 ... Laravel13, default LaravelAuto
+})
+```
+
+Or per dispatcher with `queue.ForLaravel(queue.Laravel12)`, from the environment with `LARAVEL_VERSION=12`, or on the CLI with `--laravel-version=12`. `queue.ParseLaravelVersion` accepts `"12"`, `"12.x"`, `"v12.3.1"` and `"auto"`.
+
+### Auto-detection
+
+With `LaravelAuto` (the default) a dispatcher looks at a job already on the queue, ready, delayed or reserved, and adopts the version that wrote it. While the queue is empty it writes the latest format, which Laravel 10-12 accept because they ignore payload keys they do not know, and checks again every 30 seconds.
+
+```go
+v, _ := driver.DetectLaravelVersion(ctx, "default") // LaravelAuto if the queue is empty
+v, ok := queue.DetectLaravelVersion(rawPayload)      // from any payload
+v := job.LaravelVersion()                            // inside a handler
+queues, _ := queue.DiscoverQueues(ctx, rdb)          // [{Prefix: "laravel_database_", Queue: "default"}, ...]
+```
+
+Detection reads payload keys, so it has limits:
+
+- Laravel 11 is only recognised when the job carries a Context; otherwise it reports 10. Both write the same payload, so nothing changes in practice.
+- An app can add its own keys with `Queue::createPayloadUsing`, and early 12.x / 13.x releases may predate the keys that identify them. Pin the version if detection gets it wrong.
+- The Redis prefix and the cluster key layout cannot be detected from a queue that has not been found yet. On Redis Cluster with Laravel 13, set `LaravelVersion: queue.Laravel13` (or `HashTagQueues: true`).
 
 ## Known limitations
 

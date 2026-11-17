@@ -1,6 +1,7 @@
 package phpserialize
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -20,48 +21,81 @@ func DecodeBytes(data []byte) (any, error) {
 	return Decode(string(data))
 }
 
+// MaxDepth is the maximum nesting depth Decode accepts. It matches PHP's
+// default unserialize_max_depth and keeps hostile payloads from exhausting
+// the stack.
+const MaxDepth = 4096
+
 type decoder struct {
-	data string
-	pos  int
-	refs []any // for reference tracking
+	data  string
+	pos   int
+	depth int
+	// refs mirrors PHP's unserialize slot table, which r:/R: indexes into
+	// (1-based). Every value occupies a slot except array keys, property
+	// names and R: references themselves.
+	refs []any
 }
 
 func (d *decoder) readValue() (any, error) {
 	if d.pos >= len(d.data) {
-		return nil, fmt.Errorf("unexpected end of data")
+		return nil, errors.New("unexpected end of data")
 	}
 
-	switch d.data[d.pos] {
-	case 'N':
-		return d.readNull()
-	case 'b':
-		return d.readBool()
-	case 'i':
-		return d.readInt()
-	case 'd':
-		return d.readFloat()
-	case 's':
-		return d.readString()
-	case 'a':
-		return d.readArray()
-	case 'O':
-		return d.readObject()
-	case 'r', 'R':
-		return d.readReference()
-	case 'C':
-		return d.readCustomObject()
-	case 'E':
-		return d.readEnum()
-	default:
-		return nil, fmt.Errorf("unknown type indicator '%c'", d.data[d.pos])
+	d.depth++
+	defer func() { d.depth-- }()
+	if d.depth > MaxDepth {
+		return nil, fmt.Errorf("maximum nesting depth of %d exceeded", MaxDepth)
 	}
+
+	indicator := d.data[d.pos]
+	if indicator == 'R' {
+		// PHP references alias an existing slot and do not create one.
+		return d.readReference()
+	}
+
+	slot := len(d.refs)
+	d.refs = append(d.refs, nil)
+
+	var (
+		val any
+		err error
+	)
+	switch indicator {
+	case 'N':
+		val, err = d.readNull()
+	case 'b':
+		val, err = d.readBool()
+	case 'i':
+		val, err = d.readInt()
+	case 'd':
+		val, err = d.readFloat()
+	case 's':
+		val, err = d.readString()
+	case 'a':
+		val, err = d.readArray(slot)
+	case 'O':
+		val, err = d.readObject(slot)
+	case 'r':
+		// Object back-references occupy a slot of their own.
+		val, err = d.readReference()
+	case 'C':
+		val, err = d.readCustomObject()
+	case 'E':
+		val, err = d.readEnum()
+	default:
+		return nil, fmt.Errorf("unknown type indicator '%c'", indicator)
+	}
+	if err != nil {
+		return nil, err
+	}
+	d.refs[slot] = val
+	return val, nil
 }
 
 func (d *decoder) readNull() (any, error) {
 	if !d.expect("N;") {
 		return nil, fmt.Errorf("expected N;")
 	}
-	d.refs = append(d.refs, nil)
 	return nil, nil
 }
 
@@ -72,12 +106,14 @@ func (d *decoder) readBool() (any, error) {
 	if d.pos >= len(d.data) {
 		return nil, fmt.Errorf("unexpected end reading bool")
 	}
+	if d.data[d.pos] != '0' && d.data[d.pos] != '1' {
+		return nil, fmt.Errorf("invalid bool value '%c'", d.data[d.pos])
+	}
 	val := d.data[d.pos] == '1'
 	d.pos++
 	if !d.expect(";") {
 		return nil, fmt.Errorf("expected ; after bool")
 	}
-	d.refs = append(d.refs, val)
 	return val, nil
 }
 
@@ -85,13 +121,14 @@ func (d *decoder) readInt() (any, error) {
 	if !d.expect("i:") {
 		return nil, fmt.Errorf("expected 'i:' prefix")
 	}
-	numStr := d.readUntil(';')
-	d.pos++ // skip ;
-	val, err := strconv.ParseInt(numStr, 10, 64)
+	numStr, err := d.readTerminated()
 	if err != nil {
-		return nil, fmt.Errorf("invalid int: %w", err)
+		return nil, err
 	}
-	d.refs = append(d.refs, val)
+	val, perr := strconv.ParseInt(numStr, 10, 64)
+	if perr != nil {
+		return nil, fmt.Errorf("invalid int: %w", perr)
+	}
 	return val, nil
 }
 
@@ -99,26 +136,24 @@ func (d *decoder) readFloat() (any, error) {
 	if !d.expect("d:") {
 		return nil, fmt.Errorf("expected 'd:' prefix")
 	}
-	numStr := d.readUntil(';')
-	d.pos++ // skip ;
+	numStr, err := d.readTerminated()
+	if err != nil {
+		return nil, err
+	}
 
 	switch strings.ToUpper(numStr) {
 	case "INF":
-		d.refs = append(d.refs, math.Inf(1))
 		return math.Inf(1), nil
 	case "-INF":
-		d.refs = append(d.refs, math.Inf(-1))
 		return math.Inf(-1), nil
 	case "NAN":
-		d.refs = append(d.refs, math.NaN())
 		return math.NaN(), nil
 	}
 
-	val, err := strconv.ParseFloat(numStr, 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid float: %w", err)
+	val, perr := strconv.ParseFloat(numStr, 64)
+	if perr != nil {
+		return nil, fmt.Errorf("invalid float: %w", perr)
 	}
-	d.refs = append(d.refs, val)
 	return val, nil
 }
 
@@ -141,11 +176,10 @@ func (d *decoder) readString() (string, error) {
 	if !d.expect(`";`) {
 		return "", fmt.Errorf("expected \"; after string content")
 	}
-	d.refs = append(d.refs, val)
 	return val, nil
 }
 
-func (d *decoder) readArray() (any, error) {
+func (d *decoder) readArray(slot int) (any, error) {
 	if !d.expect("a:") {
 		return nil, fmt.Errorf("expected 'a:' prefix")
 	}
@@ -161,9 +195,9 @@ func (d *decoder) readArray() (any, error) {
 		Keys:   make([]any, 0, count),
 		Values: make([]any, 0, count),
 	}
-	d.refs = append(d.refs, arr)
+	d.refs[slot] = arr
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		key, err := d.readArrayKey()
 		if err != nil {
 			return nil, fmt.Errorf("reading array key %d: %w", i, err)
@@ -197,7 +231,7 @@ func (d *decoder) readArrayKey() (any, error) {
 	}
 }
 
-func (d *decoder) readObject() (any, error) {
+func (d *decoder) readObject(slot int) (any, error) {
 	if !d.expect("O:") {
 		return nil, fmt.Errorf("expected 'O:' prefix")
 	}
@@ -229,9 +263,9 @@ func (d *decoder) readObject() (any, error) {
 		ClassName:  className,
 		Properties: make(map[string]any, propCount),
 	}
-	d.refs = append(d.refs, obj)
+	d.refs[slot] = obj
 
-	for i := 0; i < propCount; i++ {
+	for i := range propCount {
 		rawKey, err := d.readString()
 		if err != nil {
 			return nil, fmt.Errorf("reading property key %d: %w", i, err)
@@ -257,11 +291,13 @@ func (d *decoder) readReference() (any, error) {
 	if !d.expect(":") {
 		return nil, fmt.Errorf("expected : after reference type")
 	}
-	numStr := d.readUntil(';')
-	d.pos++ // skip ;
-	idx, err := strconv.Atoi(numStr)
+	numStr, err := d.readTerminated()
 	if err != nil {
-		return nil, fmt.Errorf("invalid reference index: %w", err)
+		return nil, err
+	}
+	idx, perr := strconv.Atoi(numStr)
+	if perr != nil {
+		return nil, fmt.Errorf("invalid reference index: %w", perr)
 	}
 	// PHP references are 1-based.
 	idx--
@@ -311,7 +347,6 @@ func (d *decoder) readCustomObject() (any, error) {
 		ClassName:  className,
 		Properties: map[string]any{},
 	}
-	d.refs = append(d.refs, obj)
 	return obj, nil
 }
 
@@ -346,7 +381,6 @@ func (d *decoder) readEnum() (any, error) {
 		ClassName: val[:idx],
 		CaseName:  val[idx+1:],
 	}
-	d.refs = append(d.refs, enum)
 	return enum, nil
 }
 
@@ -359,7 +393,23 @@ func (d *decoder) readLength() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid length: %w", err)
 	}
+	// Every counted byte or element needs at least one byte of input, so a
+	// length beyond what is left is malformed. Rejecting it here also stops a
+	// forged count from driving a huge allocation.
+	if val < 0 || val > len(d.data)-d.pos {
+		return 0, fmt.Errorf("length %d out of range", val)
+	}
 	return val, nil
+}
+
+// readTerminated reads up to the next ';' and consumes it.
+func (d *decoder) readTerminated() (string, error) {
+	s := d.readUntil(';')
+	if d.pos >= len(d.data) {
+		return "", errors.New("missing ; terminator")
+	}
+	d.pos++
+	return s, nil
 }
 
 func (d *decoder) expect(s string) bool {
