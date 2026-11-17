@@ -1,0 +1,79 @@
+{{define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Home}}{{.SiteName}} · Go workers for Laravel queues{{else}}{{.Page.Title}} · {{.SiteName}}{{end}}</title>
+<meta name="description" content="{{.Page.Description}}">
+<meta name="author" content="Reno Philibert">
+<link rel="canonical" href="{{.SiteURL}}{{.Page.URL}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{.SiteName}}">
+<meta property="og:title" content="{{if .Home}}{{.SiteName}}{{else}}{{.Page.Title}}{{end}}">
+<meta property="og:description" content="{{.Page.Description}}">
+<meta property="og:url" content="{{.SiteURL}}{{.Page.URL}}">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#011627">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@100..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/site.css">
+{{end}}
+
+{{define "header"}}
+<header class="bar bar-top">
+  <a class="cell brand" href="/">laravel-queue-go</a>
+  <nav class="tabs" aria-label="Primary">
+    <a class="cell tab{{if .Home}} is-active{{end}}" href="/">_hello</a>
+    <a class="cell tab{{if and .Page.Section (ne .Page.Slug "laravel-versions") (ne .Page.Slug "upgrading")}} is-active{{end}}" href="/docs/introduction/">_docs</a>
+    <a class="cell tab{{if eq .Page.Slug "laravel-versions"}} is-active{{end}}" href="/docs/laravel-versions/">_laravel</a>
+    <a class="cell tab{{if eq .Page.Slug "upgrading"}} is-active{{end}}" href="/docs/upgrading/">_upgrading</a>
+  </nav>
+  <span class="bar-fill"></span>
+  <button class="cell search-open" type="button" data-search-open aria-label="Search the docs">
+    <span>search</span><kbd>/</kbd>
+  </button>
+  <a class="cell tab tab-right" href="{{.RepoURL}}" rel="noopener">_github</a>
+  <button class="cell menu-open" type="button" data-menu-open aria-label="Open navigation">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+</header>
+{{end}}
+
+{{define "footer"}}
+<footer class="bar bar-bottom">
+  <span class="cell cell-static">mit licensed</span>
+  <a class="cell" href="https://pkg.go.dev/github.com/rjp2525/laravel-queue-go" rel="noopener">pkg.go.dev</a>
+  <a class="cell hide-sm" href="{{.RepoURL}}/releases" rel="noopener">releases</a>
+  <span class="bar-fill"></span>
+  <a class="cell hide-sm" href="https://reno.sh" rel="noopener">reno.sh</a>
+  <a class="cell cell-last" href="https://github.com/rjp2525" rel="noopener">@rjp2525</a>
+</footer>
+{{end}}
+
+{{define "sidebar"}}
+<aside class="sidebar" data-sidebar>
+  <div class="sidebar-head"><span>explorer</span><button type="button" class="sidebar-close" data-menu-close aria-label="Close navigation">×</button></div>
+  <nav aria-label="Documentation">
+    {{range .Nav}}
+    <details class="folder"{{if or .Open (eq .Name "getting-started")}} open{{end}}>
+      <summary><svg class="chev" width="10" height="10" viewBox="0 0 10 10"><path d="M3 1l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>{{.Name}}</summary>
+      <ul>
+        {{range .Items}}<li><a href="{{.URL}}"{{if .Active}} class="is-active" aria-current="page"{{end}}>{{.Title}}</a></li>
+        {{end}}
+      </ul>
+    </details>
+    {{end}}
+  </nav>
+</aside>
+{{end}}
+
+{{define "search"}}
+<div class="search" data-search hidden>
+  <div class="search-box" role="dialog" aria-label="Search the docs">
+    <div class="search-input"><span class="prompt">&gt;</span><input type="search" placeholder="search the docs" autocomplete="off" spellcheck="false" data-search-input><kbd>esc</kbd></div>
+    <ul class="search-results" data-search-results></ul>
+    <p class="search-hint" data-search-hint>// type to search · ↑↓ to move · enter to open</p>
+  </div>
+</div>
+<script src="/js/site.js" defer></script>
+{{end}}

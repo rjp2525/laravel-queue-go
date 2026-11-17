@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>{{template "head" .}}</head>
+<body>
+<div class="frame">
+  {{template "header" .}}
+  <div class="workspace">
+    {{template "sidebar" .}}
+    <div class="scrim" data-menu-close></div>
+    <main class="pane" data-pane>
+      <div class="crumbs"><span>docs</span><i>/</i><span>{{.Page.Section}}</span><i>/</i><b>{{.Page.Slug}}.md</b>
+        <a class="edit" href="{{.RepoURL}}/edit/main/website/{{.Page.Source}}" rel="noopener">edit this page</a>
+      </div>
+      <div class="doc">
+        <article class="prose">
+          <h1>{{.Page.Title}}</h1>
+          <p class="lede">{{.Page.Description}}</p>
+          {{.Page.Body}}
+          <nav class="pager" aria-label="Pagination">
+            {{if .Page.Prev}}<a class="pager-prev" href="{{.Page.Prev.URL}}"><span>// previous</span>{{.Page.Prev.Title}}</a>{{else}}<span></span>{{end}}
+            {{if .Page.Next}}<a class="pager-next" href="{{.Page.Next.URL}}"><span>// next</span>{{.Page.Next.Title}}</a>{{end}}
+          </nav>
+        </article>
+        {{if .Page.Headings}}
+        <aside class="toc" aria-label="On this page">
+          <span class="toc-title">// on this page</span>
+          <ul>
+            {{range .Page.Headings}}<li class="l{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>
+            {{end}}
+          </ul>
+        </aside>
+        {{end}}
+      </div>
+    </main>
+  </div>
+  {{template "footer" .}}
+</div>
+{{template "search" .}}
+</body>
+</html>
