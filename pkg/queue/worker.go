@@ -270,7 +270,7 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 	job, err := ParseJob(ctx, raw, w.driver)
 	if err != nil {
 		w.logger.Error("failed to parse job", "error", err)
-		_ = w.driver.Delete(ctx, raw)
+		_ = w.driver.Delete(context.WithoutCancel(ctx), raw)
 		return
 	}
 
@@ -300,7 +300,9 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 	duration := time.Since(start)
 
 	if err != nil {
-		w.handleFailure(ctx, job, err, duration)
+		// Recording the outcome must not be skipped because the worker is
+		// shutting down.
+		w.handleFailure(context.WithoutCancel(ctx), job, err, duration)
 		return
 	}
 

@@ -45,7 +45,10 @@ func ParseJob(ctx context.Context, raw *RawJob, driver Driver) (*Job, error) {
 		data:    data,
 		format:  format,
 		driver:  driver,
-		ctx:     ctx,
+		// Delete and Release must still reach the driver when ctx is
+		// cancelled during shutdown, or a finished job stays reserved and
+		// runs again after retry_after.
+		ctx: context.WithoutCancel(ctx),
 	}, nil
 }
 
