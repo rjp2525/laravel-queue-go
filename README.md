@@ -115,6 +115,7 @@ queue.WorkerOptions{
     Concurrency: 4,              // parallel goroutines (1 = serial)
     MaxJobs:     1000,           // stop after N jobs (0 = unlimited)
     MaxTime:     3600,           // stop after N seconds (0 = unlimited)
+    Timeout:     0,              // timeout for jobs without one, like --timeout (0 = none; Laravel defaults to 60s)
     Sleep:       3*time.Second,  // poll interval when queue is empty
     StopOnEmpty: false,          // exit when queue drains
     MaxTries:    0,              // attempts for jobs without maxTries, like --tries (0 = unlimited; Laravel defaults to 1)
@@ -235,17 +236,16 @@ The middleware pipeline wraps job execution. Each middleware calls `next()` to p
 import "github.com/rjp2525/laravel-queue-go/pkg/middleware"
 ```
 
-`Timeout` enforces a per-job timeout:
+Job timeouts need no middleware. The worker cancels the handler's `ctx` when the payload's `timeout` (or `WorkerOptions.Timeout`) expires, and fails the job instead of retrying it when the payload has `failOnTimeout`. Handlers must watch `ctx` for the timeout to take effect:
 
 ```go
-middleware.Timeout(func(job middleware.Job) *time.Duration {
-    if t := job.Timeout(); t != nil {
-        d := time.Duration(*t) * time.Second
-        return &d
-    }
-    return nil
+mgr.Register(`App\Jobs\Export`, func(ctx context.Context, job *queue.Job) error {
+    req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil) // aborted at the timeout
+    // ...
 })
 ```
+
+`middleware.Timeout` is deprecated: it cannot cancel the handler, only stop waiting for it.
 
 `RateLimited` throttles processing to N jobs per decay window:
 
@@ -280,7 +280,7 @@ middleware.ThrottlesExceptions(redisClient, func(job middleware.Job) string {
 Apply middleware globally:
 
 ```go
-mgr.Use(middleware.Timeout(timeoutGetter), middleware.RateLimited(rdb, "api", 60, time.Minute))
+mgr.Use(middleware.RateLimited(rdb, "api", 60, time.Minute))
 ```
 
 ### Events
@@ -339,6 +339,22 @@ if batchID := job.BatchID(); batchID != "" {
 }
 ```
 
+`batch.Repository` reads and updates Laravel's `job_batches` table (same layout in Laravel 10-13; MySQL, PostgreSQL, SQLite and SQL Server are detected from the driver):
+
+```go
+repo, err := batch.NewRepository(db, "job_batches")
+
+b, err := repo.Find(ctx, job.BatchID())
+if b.Cancelled() {
+    return nil // skip, as Laravel does for jobs of a cancelled batch
+}
+b.AllowsFailures()                                // Laravel's allowFailures option
+repo.DecrementPendingJobs(ctx, b.ID)              // a job of the batch succeeded
+repo.IncrementFailedJobs(ctx, b.ID, job.UUID())   // a job of the batch failed for good
+```
+
+The worker does not update batches by itself, and a batch's `then` / `catch` / `finally` callbacks are serialized PHP closures that only a Laravel worker can run. If a Go worker handles jobs of a Laravel batch, it has to update the counters as above, and callbacks fire only when the job that completes the batch is processed by Laravel.
+
 Chained jobs:
 
 ```go
@@ -371,11 +387,13 @@ Enum values are decoded into `*phpserialize.Enum` with `ClassName` and `CaseName
 
 ### Configuration
 
-All settings can be loaded from environment variables:
+All settings can be loaded from environment variables. The loader also understands the variables a Laravel `.env` already defines (`REDIS_HOST` + `REDIS_PORT`, `REDIS_PASSWORD=null`, `REDIS_QUEUE`, `REDIS_QUEUE_RETRY_AFTER`), so a Go worker can share that file. Durations accept Go syntax (`90s`) or a bare number of seconds (`90`).
 
 | Variable | Default | Description |
 |---|---|---|
-| `REDIS_HOST` | `127.0.0.1:6379` | Redis address |
+| `REDIS_HOST` | `127.0.0.1` | Redis host, or `host:port` |
+| `REDIS_PORT` | `6379` | Redis port, used when `REDIS_HOST` has none |
+| `REDIS_USERNAME` | (empty) | Redis ACL username |
 | `REDIS_PASSWORD` | (empty) | Redis password |
 | `REDIS_DB` | `0` | Redis database number |
 | `REDIS_PREFIX` | derived, see below | Redis key prefix |
@@ -396,7 +414,8 @@ All settings can be loaded from environment variables:
 ```go
 import "github.com/rjp2525/laravel-queue-go/pkg/config"
 
-cfg := config.FromEnv()
+cfg := config.FromEnv()        // invalid values silently keep their defaults
+cfg, err := config.Load()      // same, but err names every invalid variable
 ```
 
 When `REDIS_PREFIX` is not set, the prefix is derived the way Laravel's `config/database.php` does it: `{slug(APP_NAME)}_database_` for Laravel 10 and 11, `{slug(APP_NAME)}-database-` for 12 and 13 (and for `auto`). The prefix is part of the app's own config file, so an app created on Laravel 10 and upgraded since still uses the underscore form. If jobs do not show up, check the real value with `php artisan tinker --execute="echo config('database.redis.options.prefix');"` or `queue.DiscoverQueues`.

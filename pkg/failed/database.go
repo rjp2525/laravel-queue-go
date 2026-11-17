@@ -4,25 +4,53 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rjp2525/laravel-queue-go/pkg/dialect"
 	"github.com/rjp2525/laravel-queue-go/pkg/internal/dbutil"
 )
 
+// DatabaseProvider stores failed jobs in Laravel's failed_jobs table, in the
+// layout of the "database-uuids" driver (Laravel's default since version 8).
 type DatabaseProvider struct {
-	db    *sql.DB
-	table string
+	db      *sql.DB
+	table   string
+	dialect dialect.Dialect
 }
 
-func NewDatabaseProvider(db *sql.DB, table string) (*DatabaseProvider, error) {
+// DatabaseOption configures a DatabaseProvider.
+type DatabaseOption func(*DatabaseProvider)
+
+// WithDialect sets the SQL dialect instead of detecting it from the driver.
+// Needed when the driver is wrapped (tracing, pooling) and detection cannot
+// see the real one.
+func WithDialect(d dialect.Dialect) DatabaseOption {
+	return func(p *DatabaseProvider) { p.dialect = d }
+}
+
+// NewDatabaseProvider returns a provider for the given table ("failed_jobs"
+// when empty). The SQL dialect is detected from db's driver, so MySQL,
+// PostgreSQL, SQLite and SQL Server work without configuration.
+func NewDatabaseProvider(db *sql.DB, table string, opts ...DatabaseOption) (*DatabaseProvider, error) {
 	if table == "" {
 		table = "failed_jobs"
 	}
 	if err := dbutil.ValidateTableName(table); err != nil {
 		return nil, fmt.Errorf("failed: %w", err)
 	}
-	return &DatabaseProvider{db: db, table: table}, nil
+	p := &DatabaseProvider{db: db, table: table}
+	for _, opt := range opts {
+		opt(p)
+	}
+	p.dialect = p.dialect.Resolve(db)
+	return p, nil
+}
+
+// q adapts a query's "?" placeholders to the database in use.
+func (p *DatabaseProvider) q(query string) string {
+	return p.dialect.Rebind(query)
 }
 
 func (p *DatabaseProvider) Log(ctx context.Context, record Record) error {
@@ -32,7 +60,7 @@ func (p *DatabaseProvider) Log(ctx context.Context, record Record) error {
 	}
 
 	query := `INSERT INTO ` + p.table + ` (uuid, connection, queue, payload, exception, failed_at) VALUES (?, ?, ?, ?, ?, ?)`
-	_, err := p.db.ExecContext(ctx, query, jobUUID, record.Connection, record.Queue, string(record.Payload), record.Exception, time.Now())
+	_, err := p.db.ExecContext(ctx, p.q(query), jobUUID, record.Connection, record.Queue, string(record.Payload), strings.ToValidUTF8(record.Exception, "\uFFFD"), time.Now())
 	if err != nil {
 		return fmt.Errorf("failed_jobs: log: %w", err)
 	}
@@ -41,7 +69,7 @@ func (p *DatabaseProvider) Log(ctx context.Context, record Record) error {
 
 func (p *DatabaseProvider) Find(ctx context.Context, id int64) (*FailedJob, error) {
 	query := `SELECT id, uuid, connection, queue, payload, exception, failed_at FROM ` + p.table + ` WHERE id = ?`
-	row := p.db.QueryRowContext(ctx, query, id)
+	row := p.db.QueryRowContext(ctx, p.q(query), id)
 
 	var fj FailedJob
 	if err := row.Scan(&fj.ID, &fj.UUID, &fj.Connection, &fj.Queue, &fj.Payload, &fj.Exception, &fj.FailedAt); err != nil {
@@ -74,7 +102,7 @@ func (p *DatabaseProvider) All(ctx context.Context) ([]*FailedJob, error) {
 
 func (p *DatabaseProvider) Forget(ctx context.Context, id int64) error {
 	query := `DELETE FROM ` + p.table + ` WHERE id = ?`
-	_, err := p.db.ExecContext(ctx, query, id)
+	_, err := p.db.ExecContext(ctx, p.q(query), id)
 	if err != nil {
 		return fmt.Errorf("failed_jobs: forget %d: %w", id, err)
 	}

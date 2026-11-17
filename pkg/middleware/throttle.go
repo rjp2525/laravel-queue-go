@@ -12,8 +12,8 @@ const throttleKeyPrefix = "laravel_throttle_exceptions:"
 // luaThrottle atomically increments and sets TTL if needed (same pattern as luaRateLimit).
 var luaThrottle = redis.NewScript(`
 local count = redis.call('incr', KEYS[1])
-if count == 1 then
-    redis.call('expire', KEYS[1], ARGV[1])
+if count == 1 or redis.call('pttl', KEYS[1]) < 0 then
+    redis.call('pexpire', KEYS[1], ARGV[1])
 end
 return count
 `)
@@ -32,7 +32,7 @@ func ThrottlesExceptions(client redis.Cmdable, keyFunc KeyFunc, maxExceptions in
 
 		count, redisErr := luaThrottle.Run(ctx, client,
 			[]string{key},
-			int(decay.Seconds()),
+			windowMillis(decay),
 		).Int64()
 		if redisErr != nil {
 			return err
