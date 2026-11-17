@@ -130,7 +130,7 @@ mgr.Register(`App\Jobs\SendWelcomeEmail`, func(ctx context.Context, job *queue.J
 })
 ```
 
-The worker resolves handlers by trying `job.CommandName()` first, then `job.DisplayName()`, and finally the default handler.
+The worker resolves handlers by trying `job.CommandName()` first, then `job.DisplayName()`, and finally the default handler. A job that matches none of them is failed with `queue.ErrNoHandler` (removed from the queue and written to the failed job provider), not silently dropped. Only run a Go worker on queues whose jobs it has handlers for, or register a default handler.
 
 ### Job property access
 
