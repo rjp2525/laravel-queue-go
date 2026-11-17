@@ -172,8 +172,35 @@ func (d *RedisDriver) Release(ctx context.Context, job *RawJob, delay time.Durat
 	return nil
 }
 
+// Size is the number of jobs on the queue in any state: ready, delayed and
+// reserved. It is the same number Laravel's Queue::size() reports. Use
+// PendingSize for the jobs that are ready to run now.
 func (d *RedisDriver) Size(ctx context.Context, queue string) (int64, error) {
+	size, err := luaSize.Run(ctx, d.client,
+		[]string{d.keys.Ready(queue), d.keys.Delayed(queue), d.keys.Reserved(queue)},
+	).Int64()
+	if err != nil {
+		return 0, fmt.Errorf("size of %s: %w", queue, err)
+	}
+	return size, nil
+}
+
+// PendingSize is the number of jobs ready to be reserved, like Laravel 12's
+// Queue::pendingSize().
+func (d *RedisDriver) PendingSize(ctx context.Context, queue string) (int64, error) {
 	return d.client.LLen(ctx, d.keys.Ready(queue)).Result()
+}
+
+// DelayedSize is the number of jobs waiting for their delay or retry backoff
+// to pass, like Laravel 12's Queue::delayedSize().
+func (d *RedisDriver) DelayedSize(ctx context.Context, queue string) (int64, error) {
+	return d.client.ZCard(ctx, d.keys.Delayed(queue)).Result()
+}
+
+// ReservedSize is the number of jobs currently held by workers, like Laravel
+// 12's Queue::reservedSize().
+func (d *RedisDriver) ReservedSize(ctx context.Context, queue string) (int64, error) {
+	return d.client.ZCard(ctx, d.keys.Reserved(queue)).Result()
 }
 
 func (d *RedisDriver) Clear(ctx context.Context, queue string) (int64, error) {
