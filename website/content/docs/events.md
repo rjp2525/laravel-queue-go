@@ -49,7 +49,7 @@ type Event struct {
 
 ## Listeners run inline
 
-A listener is called on the goroutine that's processing the job, before the worker moves on. That keeps ordering simple, and it means two things:
+A listener is called on the goroutine that's processing the job, before the worker moves on. That keeps ordering simple. It also means two things:
 
 - **Keep them quick.** A listener that makes a slow network call slows every job. Hand slow work to a channel or a goroutine.
 - **Make them concurrency-safe.** With `Concurrency` above 1, the same listener is called from several goroutines at once.

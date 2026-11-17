@@ -1,13 +1,13 @@
 ---
 title: Workers
-description: Starting a worker, running jobs concurrently, limits, and shutting down without losing work.
+description: Starting a worker, running jobs concurrently, limits and shutting down without losing work.
 ---
 
 A worker pulls jobs off one queue and hands each to the handler registered for its class. It's the Go counterpart of `php artisan queue:work`.
 
 ## Manager or standalone
 
-Most programs use a `Manager`. It holds your handlers, middleware, event listeners and failed-job storage, and stamps out workers that share them:
+Most programs use a `Manager`. It holds your handlers, middleware, event listeners and failed-job storage. Workers created from it share all of that:
 
 ```go
 mgr := queue.NewManager(driver)
@@ -34,7 +34,7 @@ worker.Register(`App\Jobs\ResizeImage`, resizeImage)
 ```go
 queue.WorkerOptions{
     Queue:       "default",        // the queue to consume
-    Concurrency: 4,                // jobs running at once; 0 or 1 runs them one by one
+    Concurrency: 4,                // jobs running at once (0 or 1 runs them one by one)
     Sleep:       3 * time.Second,  // pause when the queue is empty
     MaxJobs:     0,                // stop after this many jobs (0 = never)
     MaxTime:     0,                // stop after this many seconds (0 = never)
@@ -48,7 +48,7 @@ queue.WorkerOptions{
 `MaxTries`, `Backoff` and `Timeout` are fallbacks for jobs that don't set their own, the same role `--tries`, `--backoff` and `--timeout` play for `queue:work`. They're covered in [Retries and timeouts](/docs/retries/).
 
 > [!WARNING]
-> `MaxTries` defaults to `0`, which means a job with no `$tries` is retried forever. Laravel's `queue:work` defaults to one attempt. Set `MaxTries: 1` if you want the Laravel behaviour, and set it to *something* in production.
+> `MaxTries` defaults to `0`, which means a job with no `$tries` is retried forever. Laravel's `queue:work` defaults to one attempt. Set `MaxTries: 1` if you want the Laravel behaviour. Set it to *something* in production.
 
 ## Concurrency
 
@@ -80,13 +80,13 @@ This is Laravel's `block_for`. Keep it at a few seconds: it also bounds how quic
 
 ## Shutting down
 
-There are two ways to stop a worker, and the difference matters on every deploy.
+There are two ways to stop a worker. The difference matters on every deploy.
 
 **`worker.Stop()`** stops taking new jobs and lets the ones in flight finish. `Run` returns once they have.
 
-**Cancelling the context** you passed to `Run` also stops the worker, and additionally cancels the `ctx` every running handler holds.
+**Cancelling the context** you passed to `Run` also stops the worker. On top of that it cancels the `ctx` every running handler holds.
 
-The pattern you want in production is both, in order: drain first, and only cut jobs off if they overstay.
+In production you want both, in order. Drain first. Only cut jobs off if they overstay.
 
 ```go
 ctx, cancel := context.WithCancel(context.Background())
@@ -129,4 +129,4 @@ mgr.RegisterDefault(func(ctx context.Context, job *queue.Job) error {
 ```
 
 > [!WARNING]
-> Don't point a Go worker at a queue that also carries jobs meant for PHP. It will reserve them, find no handler, and fail them. Give Go its own queues.
+> Don't point a Go worker at a queue that also carries jobs meant for PHP. It will reserve them, find no handler and fail them. Give Go its own queues.

@@ -54,7 +54,7 @@ if orderID == 0 {
 
 ## Arrays
 
-PHP has one array type; Go has two. Use the accessor that matches how the array is used:
+PHP has one array type. Go has two. Use the accessor that matches how the array is used:
 
 ```go
 tags := job.GetSlice("tags")       // ['a', 'b']            -> []any{"a", "b"}
@@ -90,12 +90,12 @@ if ref == nil {
 }
 
 ref.Class      // "App\Models\User"
-ref.ID         // int64(42), or a string for UUID keys
+ref.ID         // int64(42) or a string for UUID keys
 ref.Connection // "mysql"
 ref.Relations  // relations that were loaded when the job was dispatched
 ```
 
-Loading the row is up to you. Query your database with `ref.ID`, or call an API. For a collection of models, `ref.ID` is a `*phpserialize.Array` holding the keys.
+Loading the row is up to you. Query your database with `ref.ID` or call an API. For a collection of models, `ref.ID` is a `*phpserialize.Array` holding the keys.
 
 > [!TIP]
 > If the Go handler only needs a couple of columns, pass them as plain constructor arguments instead of the model. It saves a query and keeps the job independent of your schema.
@@ -135,7 +135,7 @@ job.BatchID()       // set when the job belongs to a batch
 job.LaravelVersion() // which Laravel wrote the payload
 ```
 
-`job.Data()` returns the whole decoded object if you'd rather walk it yourself, and `job.Payload()` is the raw envelope.
+`job.Data()` returns the whole decoded object if you'd rather walk it yourself. `job.Payload()` is the raw envelope.
 
 ## Taking control of the outcome
 
@@ -152,8 +152,8 @@ To release from a handler without the retry rules getting involved, return a `Re
 return &middleware.ReleaseError{Delay: time.Minute}
 ```
 
-The job goes back on the queue for a minute regardless of `$backoff`, and it is not failed even if it was on its last attempt.
+The job goes back on the queue for a minute regardless of `$backoff`. It is not failed even if it was on its last attempt.
 
 ## JSON commands
 
-Jobs dispatched by this package with `queue.WithCommandFormat(queue.FormatJSON)` carry a JSON object instead of a PHP-serialized one. The same accessors work, and `job.Format()` tells you which you got. Laravel can't run those jobs, so only use the JSON format between Go programs.
+Jobs dispatched by this package with `queue.WithCommandFormat(queue.FormatJSON)` carry a JSON object instead of a PHP-serialized one. The same accessors work. `job.Format()` tells you which you got. Laravel can't run those jobs, so only use the JSON format between Go programs.

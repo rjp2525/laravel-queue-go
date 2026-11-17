@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Every setting in one place, and how to load them from the same .env your Laravel app uses.
+description: Every setting in one place and how to load them from the same .env your Laravel app uses.
 ---
 
 Configuration is plain Go structs. There's no global state and nothing reads the environment unless you ask it to.
@@ -67,13 +67,13 @@ worker := mgr.Worker(queue.WorkerOptions{
 })
 ```
 
-`config.Load` tells you about values it couldn't parse. `config.FromEnv` returns the same struct and silently keeps the default for anything invalid; use it when you'd rather start than stop.
+`config.Load` tells you about values it couldn't parse. `config.FromEnv` returns the same struct and silently keeps the default for anything invalid. Use it when you'd rather start than stop.
 
 ### Variables
 
 | Variable | Default | Notes |
 |---|---|---|
-| `REDIS_HOST` | `127.0.0.1` | A host, or `host:port` |
+| `REDIS_HOST` | `127.0.0.1` | A host or `host:port` |
 | `REDIS_PORT` | `6379` | Used when `REDIS_HOST` has no port |
 | `REDIS_USERNAME` | | Redis ACL user |
 | `REDIS_PASSWORD` | | `null` is read as "no password", as Laravel does |
@@ -87,10 +87,10 @@ worker := mgr.Worker(queue.WorkerOptions{
 | `QUEUE_SLEEP` | `3s` | |
 | `QUEUE_CONCURRENCY` | `1` | |
 | `QUEUE_MAX_JOBS` | `0` | `0` means no limit |
-| `QUEUE_MAX_TIME` | `0` | Seconds; `0` means no limit |
+| `QUEUE_MAX_TIME` | `0` | Seconds. `0` means no limit |
 | `QUEUE_MIGRATION_BATCH_SIZE` | `100` | |
 | `QUEUE_FAILED_TABLE` | `failed_jobs` | |
-| `DATABASE_URL` | | A DSN for you to open; nothing connects automatically |
+| `DATABASE_URL` | | A DSN for you to open. Nothing connects automatically |
 
 Durations accept Go syntax (`90s`, `1m30s`, `500ms`) or a bare number of seconds (`90`), which is how Laravel writes them.
 
@@ -104,7 +104,7 @@ APP_NAME="Acme Shop"                      # acme-shop-database-
 ```
 
 > [!WARNING]
-> That derivation matches a *fresh* app. If your `config/database.php` has been edited, or the app predates Laravel 12 and was upgraded, the real prefix may differ. Setting `REDIS_PREFIX` explicitly, in both Laravel and Go, is the reliable choice.
+> That derivation matches a *fresh* app. The real prefix may differ if your `config/database.php` has been edited or the app predates Laravel 12 and was upgraded. Setting `REDIS_PREFIX` explicitly in both Laravel and Go is the reliable choice.
 
 ## Logging
 

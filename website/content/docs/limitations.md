@@ -1,6 +1,6 @@
 ---
 title: Limitations
-description: What this package doesn't do, why, and what to do about it.
+description: What this package doesn't do, why not and what to do about it.
 ---
 
 Better to read this page now than to discover it in production.
@@ -13,7 +13,7 @@ Only Laravel's `redis` queue connection. `database`, `sqs`, `beanstalkd` and `sy
 
 ### Encrypted jobs
 
-Jobs that implement `ShouldBeEncrypted` are encrypted with your `APP_KEY`. A Go worker can't read them. Remove the interface from jobs Go should handle, and avoid putting secrets in the payload. Pass an ID and look the secret up.
+Jobs that implement `ShouldBeEncrypted` are encrypted with your `APP_KEY`. A Go worker can't read them. Remove the interface from jobs Go should handle. Keep secrets out of the payload. Pass an ID and look the secret up.
 
 ### Queued closures
 
@@ -31,7 +31,7 @@ Read from the payload, not enforced. Laravel counts exceptions in the applicatio
 
 ### Batches
 
-You can read and update `job_batches`, but the worker doesn't do it for you, and `then` / `catch` / `finally` callbacks only run in a Laravel worker. See [batches](/docs/batches/).
+You can read and update `job_batches` but the worker doesn't do it for you. `then` / `catch` / `finally` callbacks only run in a Laravel worker. See [batches](/docs/batches/).
 
 ### Chains
 
@@ -41,7 +41,7 @@ Chains dispatched from Go work. A Go worker does not automatically dispatch the 
 
 Laravel takes a lock when it dispatches a unique job and releases it when the job has been processed *by a Laravel worker*. If a Go worker processes the job, that lock is not released and stays until its `uniqueFor` expires. During that time, dispatching the same job again is silently skipped.
 
-If Go handles a unique job, give it a short `uniqueFor`, or drop `ShouldBeUnique` and deduplicate in the handler.
+If Go handles a unique job, give it a short `uniqueFor`. Or drop `ShouldBeUnique` and deduplicate in the handler.
 
 ### Job middleware defined in PHP
 

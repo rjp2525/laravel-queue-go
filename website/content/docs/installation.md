@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Requirements, the go get line, and the two settings that have to match your Laravel app.
+description: Requirements, the go get line and the two settings that have to match your Laravel app.
 ---
 
 ## Requirements
@@ -19,7 +19,7 @@ Your Laravel app needs `QUEUE_CONNECTION=redis`. Either Redis client (`phpredis`
 go get github.com/rjp2525/laravel-queue-go/v2
 ```
 
-The `/v2` at the end is part of the module path, and it's in every import too. If you're coming from v1, the [upgrade guide](/docs/upgrading/) covers the switch.
+The `/v2` at the end is part of the module path. It's in every import too. If you're coming from v1, the [upgrade guide](/docs/upgrading/) covers the switch.
 
 The package builds on [go-redis](https://github.com/redis/go-redis). You create the Redis client yourself and hand it over, so connection pooling, TLS, Sentinel and Cluster are configured the way you already know.
 
@@ -69,7 +69,7 @@ If your app sets an empty prefix, pass `NoPrefix: true`. An empty `Prefix` on it
 
 ### 2. `retry_after`
 
-`RetryAfter` is how long a job may stay reserved before Redis hands it to another worker. It's the same setting as `retry_after` in `config/queue.php` (90 seconds by default), and it should be **longer than your slowest job**. If a job takes 5 minutes and `RetryAfter` is 90 seconds, a second worker will start the same job while the first is still on it.
+`RetryAfter` is how long a job may stay reserved before Redis hands it to another worker. It's the same setting as `retry_after` in `config/queue.php` (90 seconds by default). It should be **longer than your slowest job**. If a job takes 5 minutes and `RetryAfter` is 90 seconds, a second worker will start the same job while the first is still on it.
 
 > [!TIP]
 > Give slow jobs their own queue with a generous `RetryAfter`, rather than raising it for everything. A long `RetryAfter` also means a job whose worker crashed waits that long before it is retried.
@@ -86,4 +86,4 @@ if err != nil {
 fmt.Println("jobs on default:", size)
 ```
 
-Dispatch a job from Laravel, run that, and you should see `1`. If you see `0`, the prefix is wrong. Next: [write your first handler](/docs/quick-start/).
+Dispatch a job from Laravel and run that. You should see `1`. If you see `0`, the prefix is wrong. Next: [write your first handler](/docs/quick-start/).
