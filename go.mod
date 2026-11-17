@@ -1,4 +1,4 @@
-module github.com/rjp2525/laravel-queue-go
+module github.com/rjp2525/laravel-queue-go/v2
 
 go 1.26.1
 

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rjp2525/laravel-queue-go/pkg/dialect"
-	"github.com/rjp2525/laravel-queue-go/pkg/internal/dbutil"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/dialect"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/internal/dbutil"
 )
 
 // DatabaseProvider stores failed jobs in Laravel's failed_jobs table, in the

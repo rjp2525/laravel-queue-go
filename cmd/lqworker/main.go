@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/rjp2525/laravel-queue-go/pkg/config"
-	"github.com/rjp2525/laravel-queue-go/pkg/queue"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/config"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/queue"
 )
 
 var version = "dev"

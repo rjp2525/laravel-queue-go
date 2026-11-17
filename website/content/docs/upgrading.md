@@ -1,15 +1,36 @@
 ---
 title: Upgrading
-description: What changed after v1.3.0, what you need to touch, and what you can leave alone.
+description: Moving from v1 to v2. What you need to touch, and what you can leave alone.
 ---
 
-The release after v1.3.0 is the result of a full audit against Laravel 10 through 13. It fixes bugs that duplicated or lost jobs, and a few of those fixes change behaviour you may have coded around.
+v2 is the result of a full audit against Laravel 10 through 13. It fixes bugs that duplicated or lost jobs, and a few of those fixes change behaviour you may have coded around.
 
-Most apps need three small edits. Start there.
+Most apps need four small edits. Start there.
 
-## The three you'll probably hit
+## The four you'll probably hit
 
-### 1. `job.Attempts()` starts at 1
+### 1. The import path ends in `/v2`
+
+Go puts the major version in the module path, so v2 is a different import path from v1:
+
+```bash
+go get github.com/rjp2525/laravel-queue-go/v2
+```
+
+```go
+// before
+import "github.com/rjp2525/laravel-queue-go/pkg/queue"
+
+// after
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/queue"
+```
+
+A find-and-replace of `laravel-queue-go/pkg/` with `laravel-queue-go/v2/pkg/` across your project does it. Then run `go mod tidy` to drop the v1 requirement.
+
+> [!NOTE]
+> Use **v2.0.1 or newer**. The v2.0.0 tag was published without the `/v2` path and can't be installed; `go get` rejects it.
+
+### 2. `job.Attempts()` starts at 1
 
 It used to be `0` on the first run. It now matches `$this->attempts()` in Laravel.
 
@@ -23,7 +44,7 @@ if job.Attempts() == 1 { /* first run */ }
 
 The same goes for `events.Event.Attempt`. As a side effect, a job with `$tries = 3` now runs three times, not four.
 
-### 2. `Size` counts everything
+### 3. `Size` counts everything
 
 `driver.Size` used to count only jobs ready to run. It now counts ready, delayed and reserved jobs, like `Queue::size()` in Laravel.
 
@@ -35,7 +56,7 @@ n, _ := driver.Size(ctx, "default")
 n, _ := driver.PendingSize(ctx, "default")
 ```
 
-### 3. Jobs without a handler are failed
+### 4. Jobs without a handler are failed
 
 They used to be deleted with a log line. They're now written to failed job storage and announced with `JobFailed`. If you were relying on unknown jobs being dropped, say so:
 

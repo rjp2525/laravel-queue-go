@@ -1,6 +1,6 @@
 # laravel-queue-go
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/rjp2525/laravel-queue-go.svg)](https://pkg.go.dev/github.com/rjp2525/laravel-queue-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/rjp2525/laravel-queue-go/v2.svg)](https://pkg.go.dev/github.com/rjp2525/laravel-queue-go/v2)
 [![CI](https://github.com/rjp2525/laravel-queue-go/actions/workflows/ci.yml/badge.svg)](https://github.com/rjp2525/laravel-queue-go/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rjp2525/laravel-queue-go)](https://goreportcard.com/report/github.com/rjp2525/laravel-queue-go)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -16,8 +16,10 @@ Go package for interop with Laravel's Redis queue system. Consume jobs dispatche
 
 ## Installation
 
+This is v2 of the module, so the import path ends in `/v2`. Coming from v1? See the [upgrade guide](https://laravel-queue-go.reno.sh/docs/upgrading/).
+
 ```bash
-go get github.com/rjp2525/laravel-queue-go
+go get github.com/rjp2525/laravel-queue-go/v2
 ```
 
 ## Quick start
@@ -37,7 +39,7 @@ import (
     "syscall"
 
     "github.com/redis/go-redis/v9"
-    "github.com/rjp2525/laravel-queue-go/pkg/queue"
+    "github.com/rjp2525/laravel-queue-go/v2/pkg/queue"
 )
 
 func main() {
@@ -234,7 +236,7 @@ queue.WithTags("order", "payment")
 The middleware pipeline wraps job execution. Each middleware calls `next()` to proceed:
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/middleware"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/middleware"
 ```
 
 Job timeouts need no middleware. The worker cancels the handler's `ctx` when the payload's `timeout` (or `WorkerOptions.Timeout`) expires, and fails the job instead of retrying it when the payload has `failOnTimeout`. Handlers must watch `ctx` for the timeout to take effect:
@@ -287,7 +289,7 @@ mgr.Use(middleware.RateLimited(rdb, "api", 60, time.Minute))
 ### Events
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/events"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/events"
 
 mgr.On(events.JobProcessing, func(e events.Event) {
     log.Println("processing", e.JobName, "attempt", e.Attempt)
@@ -317,7 +319,7 @@ Failed jobs can be recorded to a database table matching Laravel's `failed_jobs`
 ```go
 import (
     "database/sql"
-    "github.com/rjp2525/laravel-queue-go/pkg/failed"
+    "github.com/rjp2525/laravel-queue-go/v2/pkg/failed"
 )
 
 db, _ := sql.Open("mysql", dsn)
@@ -369,7 +371,7 @@ Chains dispatched from Go (`DispatchOptions.Chain`) are continued by Laravel's w
 The `phpserialize` package handles PHP `serialize()` / `unserialize()` for Laravel job command data:
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
 
 // Decode a PHP-serialized string.
 val, err := phpserialize.Decode(serializedString)
@@ -415,7 +417,7 @@ All settings can be loaded from environment variables. The loader also understan
 | `APP_NAME` | (empty) | Laravel `APP_NAME`; used to derive the Redis prefix when `REDIS_PREFIX` is unset |
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/config"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/config"
 
 cfg := config.FromEnv()        // invalid values silently keep their defaults
 cfg, err := config.Load()      // same, but err names every invalid variable
@@ -428,7 +430,7 @@ When `REDIS_PREFIX` is not set, the prefix is derived the way Laravel's `config/
 A standalone worker binary for quick use without writing Go code:
 
 ```bash
-go install github.com/rjp2525/laravel-queue-go/cmd/lqworker@latest
+go install github.com/rjp2525/laravel-queue-go/v2/cmd/lqworker@latest
 
 lqworker \
   --queue=default \

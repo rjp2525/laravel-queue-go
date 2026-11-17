@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
 )
 
 type Dispatcher struct {

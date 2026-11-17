@@ -54,7 +54,7 @@ return next()
 Allow at most `maxAttempts` jobs per window. Jobs over the limit go back on the queue until the window has passed.
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/middleware"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/middleware"
 
 // at most 60 jobs per minute across every worker sharing this Redis
 mgr.Use(middleware.RateLimited(rdb, "mailgun", 60, time.Minute))

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/events"
-	"github.com/rjp2525/laravel-queue-go/pkg/failed"
-	"github.com/rjp2525/laravel-queue-go/pkg/middleware"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/events"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/failed"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/middleware"
-	"github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/middleware"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
 )
 
 var _ middleware.Job = (*Job)(nil)

@@ -6,7 +6,7 @@ description: The phpserialize package, for when the typed accessors aren't enoug
 Laravel stores a job as the output of PHP's `serialize()`. The `phpserialize` package reads and writes that format. The [job accessors](/docs/handlers/) are built on it, and you can use it directly when you need the raw structure.
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
 ```
 
 ## Decoding

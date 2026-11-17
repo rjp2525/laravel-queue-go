@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/dialect"
-	"github.com/rjp2525/laravel-queue-go/pkg/internal/dbtest"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/dialect"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/internal/dbtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

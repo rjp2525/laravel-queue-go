@@ -14,7 +14,7 @@ import (
     "database/sql"
 
     _ "github.com/go-sql-driver/mysql"
-    "github.com/rjp2525/laravel-queue-go/pkg/failed"
+    "github.com/rjp2525/laravel-queue-go/v2/pkg/failed"
 )
 
 db, err := sql.Open("mysql", dsn)
@@ -46,7 +46,7 @@ MySQL, MariaDB, PostgreSQL, SQLite and SQL Server all work. The provider looks a
 If your `*sql.DB` is wrapped by an instrumentation library (OpenTelemetry, Datadog and the like), the real driver is hidden. Say what's underneath:
 
 ```go
-import "github.com/rjp2525/laravel-queue-go/pkg/dialect"
+import "github.com/rjp2525/laravel-queue-go/v2/pkg/dialect"
 
 provider, err := failed.NewDatabaseProvider(db, "failed_jobs",
     failed.WithDialect(dialect.Postgres))

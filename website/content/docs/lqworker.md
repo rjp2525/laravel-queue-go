@@ -11,7 +11,7 @@ description: A small command-line worker for checking your setup. Read the warni
 ## Install
 
 ```bash
-go install github.com/rjp2525/laravel-queue-go/cmd/lqworker@latest
+go install github.com/rjp2525/laravel-queue-go/v2/cmd/lqworker@latest
 ```
 
 Prebuilt binaries for Linux, macOS and Windows are attached to each [GitHub release](https://github.com/rjp2525/laravel-queue-go/releases).

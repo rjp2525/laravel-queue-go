@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/phpserialize"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/phpserialize"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

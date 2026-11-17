@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rjp2525/laravel-queue-go/pkg/events"
-	"github.com/rjp2525/laravel-queue-go/pkg/failed"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/events"
+	"github.com/rjp2525/laravel-queue-go/v2/pkg/failed"
 )
 
 // ErrNoHandler is the failure recorded for a job that no registered handler
