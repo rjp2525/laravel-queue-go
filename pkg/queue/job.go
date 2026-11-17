@@ -225,16 +225,56 @@ func (j *Job) Release(delay time.Duration) error {
 	return j.driver.Release(j.ctx, j.raw, delay)
 }
 
+// HasFailed reports whether the job has used up its retries, assuming the
+// current run failed. It follows Laravel's rules: a retryUntil deadline, when
+// set, is the only limit; otherwise maxTries applies, where 0 or an absent
+// value means unlimited.
 func (j *Job) HasFailed() bool {
-	if j.payload.MaxTries != nil && j.payload.Attempts >= *j.payload.MaxTries {
-		return true
-	}
-	if j.payload.RetryUntil != nil && time.Now().Unix() >= *j.payload.RetryUntil {
-		return true
-	}
-	return false
+	return j.willExceedMaxAttempts(0)
 }
 
+// retryUntil returns the job's retry deadline, or 0 when it has none. Like
+// Laravel, a zero timestamp counts as "not set".
+func (j *Job) retryUntil() int64 {
+	if j.payload.RetryUntil == nil {
+		return 0
+	}
+	return *j.payload.RetryUntil
+}
+
+// maxTries returns the payload's maxTries, or workerDefault when the payload
+// does not set one.
+func (j *Job) maxTries(workerDefault int) int {
+	if j.payload.MaxTries != nil {
+		return *j.payload.MaxTries
+	}
+	return workerDefault
+}
+
+// willExceedMaxAttempts mirrors Worker::markJobAsFailedIfWillExceedMaxAttempts:
+// should a job whose current run just failed be failed for good?
+func (j *Job) willExceedMaxAttempts(workerDefault int) bool {
+	if until := j.retryUntil(); until != 0 {
+		return until <= time.Now().Unix()
+	}
+	maxTries := j.maxTries(workerDefault)
+	return maxTries > 0 && j.payload.Attempts >= maxTries
+}
+
+// alreadyExceedsMaxAttempts mirrors
+// Worker::markJobAsFailedIfAlreadyExceedsMaxAttempts: has a job that was just
+// reserved already been attempted too often? That happens when earlier runs
+// never reported back, e.g. the worker was killed mid-job.
+func (j *Job) alreadyExceedsMaxAttempts(workerDefault int) bool {
+	if until := j.retryUntil(); until != 0 {
+		return time.Now().Unix() > until
+	}
+	maxTries := j.maxTries(workerDefault)
+	return maxTries != 0 && j.payload.Attempts > maxTries
+}
+
+// BackoffDuration is the delay before the next retry, taken from the
+// payload's backoff schedule. It is zero when the payload has none.
 func (j *Job) BackoffDuration() time.Duration {
 	secs := j.payload.BackoffSeconds(j.payload.Attempts)
 	return time.Duration(secs) * time.Second

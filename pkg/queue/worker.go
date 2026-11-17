@@ -15,6 +15,11 @@ import (
 
 type Handler func(ctx context.Context, job *Job) error
 
+// ErrMaxAttemptsExceeded is the failure recorded for a job that is reserved
+// again after it has already used all of its attempts, which means earlier
+// runs never finished (for example the worker was killed mid-job).
+var ErrMaxAttemptsExceeded = errors.New("job has been attempted too many times")
+
 type Worker struct {
 	driver         Driver
 	options        WorkerOptions
@@ -261,6 +266,11 @@ func (w *Worker) process(ctx context.Context, raw *RawJob) {
 		return
 	}
 
+	if job.alreadyExceedsMaxAttempts(w.options.MaxTries) {
+		w.fail(ctx, job, fmt.Errorf("%s: %w", job.DisplayName(), ErrMaxAttemptsExceeded), 0)
+		return
+	}
+
 	w.events.Fire(events.Event{
 		Type:    events.JobProcessing,
 		JobUUID: job.UUID(),
@@ -319,8 +329,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		return
 	}
 
-	if !job.HasFailed() {
-		delay := job.BackoffDuration()
+	if !job.willExceedMaxAttempts(w.options.MaxTries) {
+		delay := w.options.Backoff
+		if job.payload.HasBackoff() {
+			delay = job.BackoffDuration()
+		}
 		if err := job.Release(delay); err != nil {
 			w.logger.Error("failed to release job", "job", job.DisplayName(), "error", err)
 		}
@@ -334,6 +347,11 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		return
 	}
 
+	w.fail(ctx, job, jobErr, duration)
+}
+
+// fail removes the job from the queue for good and records it as failed.
+func (w *Worker) fail(ctx context.Context, job *Job, jobErr error, duration time.Duration) {
 	if err := job.Delete(); err != nil {
 		w.logger.Error("failed to delete failed job", "job", job.DisplayName(), "error", err)
 	}
