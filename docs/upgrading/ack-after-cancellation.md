@@ -9,9 +9,9 @@
 `cancel()` in your own program), those calls failed with `context canceled`:
 
 - a job that **finished successfully** during shutdown stayed in `:reserved`
-  and ran again after `retry_after`;
+  and ran again after `retry_after`.
 - a job that failed during shutdown was not released, so its retry waited for
-  `retry_after` instead of its backoff;
+  `retry_after` instead of its backoff.
 - a job that failed for good was removed from neither Redis nor recorded in
   `failed_jobs`.
 

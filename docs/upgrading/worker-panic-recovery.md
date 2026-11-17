@@ -13,9 +13,9 @@ and the panicking job stayed in the reserved set to be picked up again after
 The worker now recovers the panic and treats it as a failed attempt:
 
 - the job is released for retry or failed according to `maxTries` /
-  `retryUntil`, exactly as if the handler had returned an error;
-- the error is a `*queue.PanicError` carrying the panic value and the stack;
-- the stack is stored in the failed job's `exception` column;
+  `retryUntil`, exactly as if the handler had returned an error.
+- the error is a `*queue.PanicError` carrying the panic value and the stack.
+- the stack is stored in the failed job's `exception` column.
 - `errors.Is` / `errors.As` see through to the panic value when it is an
   `error`.
 

@@ -18,10 +18,10 @@ Two paths deleted a job from Redis and left no record of it:
 Both are now *failed* jobs, as an unresolvable job class is in Laravel:
 
 - the job is removed from the queue (it is not retried or released, which
-  would only bounce it between workers);
+  would only bounce it between workers).
 - it is written to the failed job provider with the original payload, so
   `php artisan queue:retry` can put it back once a worker that understands it
-  is running;
+  is running.
 - `events.JobFailed` fires. For a missing handler the error wraps
   `queue.ErrNoHandler`. For an unparseable payload the event has no job name
   or UUID, only the queue and the parse error.
