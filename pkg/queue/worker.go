@@ -334,8 +334,7 @@ func (w *Worker) handleFailure(ctx context.Context, job *Job, jobErr error, dura
 		return
 	}
 
-	var releaseErr *middleware.ReleaseError
-	if errors.As(jobErr, &releaseErr) {
+	if releaseErr, ok := errors.AsType[*middleware.ReleaseError](jobErr); ok {
 		if err := job.Release(releaseErr.Delay); err != nil {
 			w.logger.Error("failed to release job", "job", job.DisplayName(), "error", err)
 		}
