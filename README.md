@@ -117,6 +117,8 @@ queue.WorkerOptions{
     MaxTime:     3600,           // stop after N seconds (0 = unlimited)
     Sleep:       3*time.Second,  // poll interval when queue is empty
     StopOnEmpty: false,          // exit when queue drains
+    MaxTries:    0,              // attempts for jobs without maxTries, like --tries (0 = unlimited; Laravel defaults to 1)
+    Backoff:     0,              // retry delay for jobs without backoff, like --backoff
 }
 ```
 
