@@ -80,9 +80,7 @@ func TestWorkerRecoversHandlerPanic(t *testing.T) {
 			worker := NewWorker(driver, WorkerOptions{StopOnEmpty: true, Concurrency: concurrency})
 			worker.SetFailedProvider(failedLog)
 			worker.Register("Boom", func(context.Context, *Job) error {
-				var m map[string]int
-				m["x"] = 1 // nil map write
-				return nil
+				panic("handler exploded")
 			})
 			var fineRan bool
 			var mu sync.Mutex
@@ -107,7 +105,7 @@ func TestWorkerRecoversHandlerPanic(t *testing.T) {
 
 			var panicErr *PanicError
 			require.ErrorAs(t, failure, &panicErr)
-			assert.Contains(t, panicErr.Error(), "assignment to entry in nil map")
+			assert.Equal(t, "panic in job handler: handler exploded", panicErr.Error())
 
 			require.Len(t, failedLog.records, 1)
 			assert.Contains(t, failedLog.records[0].Exception, "panic in job handler")
