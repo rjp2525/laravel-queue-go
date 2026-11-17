@@ -21,8 +21,21 @@ func waitForCancel(ctx context.Context, _ *Job) error {
 	return ctx.Err()
 }
 
-func runTimeoutJob(t *testing.T, opts WorkerOptions, payloadExtra string, handler Handler) (driver *panicTestDriver, failure, exception error, elapsed time.Duration) {
+// timeoutRun is what happened to the one job a test worker processed.
+type timeoutRun struct {
+	driver    *panicTestDriver
+	failure   error // from JobFailed
+	exception error // from JobExceptionOccurred
+	elapsed   time.Duration
+}
+
+func runTimeoutJob(t *testing.T, opts WorkerOptions, payloadExtra string, handler Handler) timeoutRun {
 	t.Helper()
+	var (
+		driver             *panicTestDriver
+		failure, exception error
+		elapsed            time.Duration
+	)
 	synctest.Test(t, func(t *testing.T) {
 		driver = &panicTestDriver{jobs: []*RawJob{panicTestJob("Slow", payloadExtra)}}
 		opts.StopOnEmpty = true
@@ -35,50 +48,50 @@ func runTimeoutJob(t *testing.T, opts WorkerOptions, payloadExtra string, handle
 		require.NoError(t, worker.Run(context.Background()))
 		elapsed = time.Since(start)
 	})
-	return driver, failure, exception, elapsed
+	return timeoutRun{driver: driver, failure: failure, exception: exception, elapsed: elapsed}
 }
 
 func TestWorkerEnforcesPayloadTimeout(t *testing.T) {
-	driver, failure, exception, elapsed := runTimeoutJob(t, WorkerOptions{}, `,"timeout":2,"maxTries":5`, waitForCancel)
+	run := runTimeoutJob(t, WorkerOptions{}, `,"timeout":2,"maxTries":5`, waitForCancel)
 
-	assert.Equal(t, 2*time.Second, elapsed, "the handler's context is cancelled at the payload timeout")
+	assert.Equal(t, 2*time.Second, run.elapsed, "the handler's context is cancelled at the payload timeout")
 
 	var timeoutErr *TimeoutError
-	require.ErrorAs(t, exception, &timeoutErr)
+	require.ErrorAs(t, run.exception, &timeoutErr)
 	assert.Equal(t, 2*time.Second, timeoutErr.Timeout)
-	assert.ErrorIs(t, exception, context.DeadlineExceeded, "the handler's own error is kept")
+	assert.ErrorIs(t, run.exception, context.DeadlineExceeded, "the handler's own error is kept")
 
-	assert.NoError(t, failure, "a timed-out attempt is retried while tries remain")
-	assert.Equal(t, 1, driver.released)
+	assert.NoError(t, run.failure, "a timed-out attempt is retried while tries remain")
+	assert.Equal(t, 1, run.driver.released)
 }
 
 func TestWorkerFailOnTimeoutFailsWithoutRetry(t *testing.T) {
-	driver, failure, _, _ := runTimeoutJob(t, WorkerOptions{}, `,"timeout":1,"failOnTimeout":true,"maxTries":5`, waitForCancel)
+	run := runTimeoutJob(t, WorkerOptions{}, `,"timeout":1,"failOnTimeout":true,"maxTries":5`, waitForCancel)
 
 	var timeoutErr *TimeoutError
-	require.ErrorAs(t, failure, &timeoutErr)
-	assert.Zero(t, driver.released)
-	assert.Equal(t, 1, driver.deleted)
+	require.ErrorAs(t, run.failure, &timeoutErr)
+	assert.Zero(t, run.driver.released)
+	assert.Equal(t, 1, run.driver.deleted)
 }
 
 func TestWorkerFailOnTimeoutDoesNotApplyToOtherErrors(t *testing.T) {
-	driver, failure, _, _ := runTimeoutJob(t, WorkerOptions{}, `,"timeout":60,"failOnTimeout":true,"maxTries":5`,
+	run := runTimeoutJob(t, WorkerOptions{}, `,"timeout":60,"failOnTimeout":true,"maxTries":5`,
 		func(context.Context, *Job) error { return errors.New("ordinary failure") })
 
-	assert.NoError(t, failure)
-	assert.Equal(t, 1, driver.released)
+	assert.NoError(t, run.failure)
+	assert.Equal(t, 1, run.driver.released)
 }
 
 func TestWorkerDefaultTimeout(t *testing.T) {
-	_, _, exception, elapsed := runTimeoutJob(t, WorkerOptions{Timeout: 30 * time.Second}, `,"maxTries":5`, waitForCancel)
+	run := runTimeoutJob(t, WorkerOptions{Timeout: 30 * time.Second}, `,"maxTries":5`, waitForCancel)
 
-	assert.Equal(t, 30*time.Second, elapsed)
+	assert.Equal(t, 30*time.Second, run.elapsed)
 	var timeoutErr *TimeoutError
-	assert.ErrorAs(t, exception, &timeoutErr)
+	assert.ErrorAs(t, run.exception, &timeoutErr)
 }
 
 func TestPayloadTimeoutZeroDisablesWorkerDefault(t *testing.T) {
-	_, _, exception, elapsed := runTimeoutJob(t, WorkerOptions{Timeout: time.Second}, `,"timeout":0`,
+	run := runTimeoutJob(t, WorkerOptions{Timeout: time.Second}, `,"timeout":0`,
 		func(ctx context.Context, _ *Job) error {
 			select {
 			case <-ctx.Done():
@@ -88,25 +101,25 @@ func TestPayloadTimeoutZeroDisablesWorkerDefault(t *testing.T) {
 			}
 		})
 
-	assert.Equal(t, time.Hour, elapsed)
-	assert.NoError(t, exception)
+	assert.Equal(t, time.Hour, run.elapsed)
+	assert.NoError(t, run.exception)
 }
 
 func TestHandlerFinishingAfterDeadlineWithoutErrorSucceeds(t *testing.T) {
-	driver, failure, exception, _ := runTimeoutJob(t, WorkerOptions{}, `,"timeout":1`,
+	run := runTimeoutJob(t, WorkerOptions{}, `,"timeout":1`,
 		func(context.Context, *Job) error {
 			time.Sleep(5 * time.Second) // ignores its context, but completes
 			return nil
 		})
 
-	assert.NoError(t, exception)
-	assert.NoError(t, failure)
-	assert.Equal(t, 1, driver.deleted, "the job is acknowledged, not retried")
-	assert.Zero(t, driver.released)
+	assert.NoError(t, run.exception)
+	assert.NoError(t, run.failure)
+	assert.Equal(t, 1, run.driver.deleted, "the job is acknowledged, not retried")
+	assert.Zero(t, run.driver.released)
 }
 
 func TestNoTimeoutLeavesContextAlone(t *testing.T) {
-	_, _, exception, _ := runTimeoutJob(t, WorkerOptions{}, ``,
+	run := runTimeoutJob(t, WorkerOptions{}, ``,
 		func(ctx context.Context, _ *Job) error {
 			_, hasDeadline := ctx.Deadline()
 			if hasDeadline {
@@ -114,5 +127,5 @@ func TestNoTimeoutLeavesContextAlone(t *testing.T) {
 			}
 			return nil
 		})
-	assert.NoError(t, exception)
+	assert.NoError(t, run.exception)
 }
