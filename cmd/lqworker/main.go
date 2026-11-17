@@ -34,6 +34,7 @@ func main() {
 		redisPass   string
 		redisDB     int
 		prefix      string
+		laravel     string
 		showVersion bool
 	)
 
@@ -49,6 +50,7 @@ func main() {
 	flag.StringVar(&redisPass, "redis-password", "", "Redis password")
 	flag.IntVar(&redisDB, "redis-db", -1, "Redis database number")
 	flag.StringVar(&prefix, "prefix", "", "Redis key prefix")
+	flag.StringVar(&laravel, "laravel-version", "", "Laravel major version sharing the queue: 10, 11, 12, 13 or auto (default auto)")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 
 	flag.Usage = func() {
@@ -100,6 +102,18 @@ func main() {
 	if redisDB >= 0 {
 		cfg.RedisDB = redisDB
 	}
+	if laravel != "" {
+		v, err := queue.ParseLaravelVersion(laravel)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		cfg.LaravelVersion = v
+		// The default prefix depends on the version; keep an explicit one.
+		if os.Getenv("REDIS_PREFIX") == "" {
+			cfg.RedisPrefix = v.RedisPrefix(cfg.AppName)
+		}
+	}
 	if prefix != "" {
 		cfg.RedisPrefix = prefix
 	}
@@ -127,10 +141,11 @@ func main() {
 
 	// Create the Redis driver.
 	driver := queue.NewRedisDriver(rdb, queue.RedisDriverConfig{
-		Prefix:     cfg.RedisPrefix,
-		RetryAfter: cfg.RetryAfter,
-		BlockFor:   cfg.BlockFor,
-		BatchSize:  cfg.MigrationBatchSize,
+		Prefix:         cfg.RedisPrefix,
+		LaravelVersion: cfg.LaravelVersion,
+		RetryAfter:     cfg.RetryAfter,
+		BlockFor:       cfg.BlockFor,
+		BatchSize:      cfg.MigrationBatchSize,
 	})
 
 	// Create the manager.

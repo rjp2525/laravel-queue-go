@@ -21,6 +21,30 @@ func WithRetryUntil(t int64) PayloadOption { return func(p *LaravelPayload) { p.
 
 func WithTags(tags ...string) PayloadOption { return func(p *LaravelPayload) { p.Tags = tags } }
 
+// WithDelay records the dispatch delay in the payload's "delay" key, as
+// Laravel 12+ does. It does not delay the job by itself; Dispatcher.Later and
+// DispatchOptions.Delay set it for you.
+func WithDelay(d time.Duration) PayloadOption {
+	return func(p *LaravelPayload) { p.Delay = new(int(d / time.Second)) }
+}
+
+// WithLaravelVersion selects the payload format to write. See LaravelVersion.
+func WithLaravelVersion(v LaravelVersion) PayloadOption {
+	return func(p *LaravelPayload) { p.version = v }
+}
+
+// WithBatchID sets data.batchId (Laravel 12+).
+func WithBatchID(id string) PayloadOption {
+	return func(p *LaravelPayload) { p.Data.BatchID = &id }
+}
+
+// WithDeleteWhenMissingModels sets the Laravel 13 payload flag that makes the
+// PHP worker drop the job, instead of failing it, when a serialized model no
+// longer exists.
+func WithDeleteWhenMissingModels(v bool) PayloadOption {
+	return func(p *LaravelPayload) { p.DeleteWhenMissingModels = v }
+}
+
 type WorkerOptions struct {
 	Queue       string
 	Concurrency int

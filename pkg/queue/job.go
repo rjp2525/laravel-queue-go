@@ -84,6 +84,14 @@ func decodeCommandJSON(command string) (*phpserialize.Object, CommandFormat) {
 
 func (j *Job) Format() CommandFormat { return j.format }
 
+// LaravelVersion is the Laravel major version that produced the job, inferred
+// from its payload keys. See DetectLaravelVersion for the caveats; jobs
+// dispatched by this package report the version they were written for.
+func (j *Job) LaravelVersion() LaravelVersion {
+	v, _ := DetectLaravelVersion([]byte(j.raw.Body))
+	return v
+}
+
 // Property accessors — work identically regardless of command format.
 
 func (j *Job) GetString(key string) string {
