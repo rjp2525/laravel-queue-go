@@ -150,21 +150,21 @@ func marshalCommandJSON(jobName string, args map[string]any) (string, error) {
 	return string(b), nil
 }
 
+// buildChainPayloads serializes the jobs that follow the first one in a
+// chain. Laravel stores them on the first job's "chained" property as
+// serialized commands (Queueable::chain runs serialize() on each job) and
+// later runs unserialize() on the next entry, so each element must be a
+// command in the dispatcher's format, not a queue payload.
 func (d *Dispatcher) buildChainPayloads(chain []ChainedJob) ([]json.RawMessage, error) {
-	payloads := make([]json.RawMessage, 0, len(chain))
+	commands := make([]json.RawMessage, 0, len(chain))
 	for _, cj := range chain {
 		command, err := d.marshalCommand(cj.Job, cj.Args)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("chained job %s: %w", cj.Job, err)
 		}
-		payload := NewPayload(cj.Job, command)
-		data, err := json.Marshal(payload)
-		if err != nil {
-			return nil, err
-		}
-		payloads = append(payloads, data)
+		commands = append(commands, json.RawMessage(command))
 	}
-	return payloads, nil
+	return commands, nil
 }
 
 func (d *Dispatcher) injectChain(command string, chain []json.RawMessage) (string, error) {
